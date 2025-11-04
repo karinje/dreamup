@@ -24,6 +24,7 @@ import {
   determineTestStatus,
   generateSummary,
 } from './evaluation/scoring.js';
+import { createGif, getGifPath, getOptimalDimensions } from './evidence/gif.js';
 
 /**
  * Main function to run QA test on a game
@@ -180,6 +181,36 @@ async function runTest(
     llm_model: config.llmModel,
   };
 
+  // Create GIF if enabled and we have screenshots
+  let gifPath: string | undefined;
+  if (config.enableGifRecording && gameState.screenshots.length > 1) {
+    try {
+      logger.info('Creating gameplay GIF');
+      gifPath = getGifPath(sessionDir);
+      
+      // Get optimal dimensions from first screenshot
+      const dimensions = await getOptimalDimensions(gameState.screenshots[0].path);
+      
+      // Create GIF (max 30 seconds at 2 FPS = 60 frames)
+      const maxFrames = Math.min(gameState.screenshots.length, 60);
+      const screenshots = gameState.screenshots.slice(0, maxFrames);
+      
+      await createGif(screenshots, gifPath, {
+        width: dimensions.width,
+        height: dimensions.height,
+        delay: 500, // 500ms per frame
+        quality: 10,
+      });
+      
+      logger.info('GIF created successfully', { path: gifPath });
+    } catch (error) {
+      logger.warn('Failed to create GIF, continuing without it', {
+        error: (error as Error).message,
+      });
+      gifPath = undefined;
+    }
+  }
+
   // Build final report
   const report: QAReport = {
     status,
@@ -189,6 +220,7 @@ async function runTest(
     screenshots: gameState.screenshots.map((s) => s.path),
     logs: [joinPath(sessionDir, 'logs', 'console-logs.json')],
     metadata,
+    gif: gifPath,
   };
 
   // Save report

@@ -362,6 +362,18 @@
                         </div>
                     ` : ''}
 
+                    ${report.gif ? `
+                        <div style="margin-top: 25px;">
+                            <h3 style="margin-bottom: 15px;">🎬 Gameplay Recording</h3>
+                            <div style="background: #0f172a; border-radius: 8px; padding: 20px; text-align: center;">
+                                <img src="/${report.gif}" alt="Gameplay GIF" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                                <div style="margin-top: 10px; color: #94a3b8; font-size: 14px;">
+                                    Animated gameplay session
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
                     ${report.screenshots.length > 0 ? `
                         <div class="screenshots">
                             ${report.screenshots.map(path => `
