@@ -132,7 +132,7 @@ async function runTest(
   const gameState = createGameState();
 
   // Navigate through the game
-  await navigateGame(sessionDir, gameState);
+  await navigateGame(sessionDir, gameState, gameUrl);
 
   logger.info('Navigation complete, collecting evidence');
 

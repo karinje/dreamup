@@ -223,6 +223,137 @@ export function formatLogsForPrompt(logs: LogEntry[], maxLength: number = 100): 
 }
 
 /**
+ * Generate prompt for detecting and handling modals/overlays
+ */
+export function generateModalDetectionPrompt(): string {
+  return `Analyze this screenshot and determine if there are any modals, popups, or overlays blocking the main game interface.
+
+**IMPORTANT**: Our goal is to PLAY the actual game, NOT do tutorials or learn how to play.
+
+Look for:
+- Welcome screens or tutorial prompts → SKIP or CLOSE them
+- Cookie consent banners → Accept or close
+- Age verification dialogs → Accept
+- "How to play" instructions → SKIP
+- Tutorial offers (e.g., "Would you like to learn?") → DECLINE or CLOSE
+- Any overlay that needs to be dismissed
+- Close buttons (X), Skip buttons, "No Thanks", or "Play Now" options
+
+Respond with a JSON object:
+{
+  "has_modal": true/false,
+  "modal_type": "welcome/tutorial/cookie/age_gate/other/none",
+  "recommended_action": "Describe exactly what button/element to click to dismiss or proceed. Examples: 'Click the X button in top right', 'Click Skip Tutorial', 'Click No Thanks', 'Click the close button'",
+  "confidence": 0.0-1.0
+}
+
+**Priority**: If you see both "Play Tutorial" and a close/skip option, ALWAYS choose to close/skip the tutorial!
+
+If there's no modal, set has_modal to false and recommended_action to "none".`;
+}
+
+/**
+ * Generate prompt for finding the game start mechanism
+ */
+export function generateGameStartPrompt(actionHistory: string[]): string {
+  return `Analyze this screenshot and determine how to start or begin playing this game.
+
+**IMPORTANT**: We want to play the ACTUAL game, NOT a tutorial. If you see tutorial options, avoid them!
+
+Previous attempts:
+${actionHistory.slice(-3).map((action, i) => `${i + 1}. ${action}`).join('\n') || 'None yet'}
+
+Look for:
+- "Play", "Start", "New Game", "Begin" buttons
+- Game canvas that's already interactive (auto-start games)
+- Menu options to start gameplay
+- **AVOID**: "Play Tutorial", "Learn to Play", "How to Play" buttons
+
+**Priority**:
+1. If you see "New Game" → Click it
+2. If you see a game board/canvas with tiles/pieces → The game is already started
+3. If you see "Start" or "Play" (but NOT "Play Tutorial") → Click it
+4. If you're in a tutorial screen → Return "Click Skip Tutorial" or "Click Exit Tutorial"
+
+Respond with a JSON object:
+{
+  "game_state": "needs_start_button/already_started/in_tutorial/in_menu/unknown",
+  "start_mechanism": "Describe exactly what to click or do to start. Examples: 'Click the New Game button', 'Click Start', 'Game is already playing', 'Skip the tutorial by clicking X'",
+  "confidence": 0.0-1.0
+}
+
+Be specific about button text, colors, or positions. If multiple options exist, choose the one that gets us to actual gameplay fastest.`;
+}
+
+/**
+ * Generate prompt for initial page analysis and navigation
+ */
+export function generateInitialNavigationPrompt(
+  gameUrl: string
+): string {
+  return `You are an AI QA agent testing a browser game. Analyze this screenshot of the initial page load.
+
+Game URL: ${gameUrl}
+
+Your goal: Get to the actual playable game as quickly as possible.
+
+Analyze the screenshot and determine:
+1. Is there a modal/overlay blocking the game? (welcome screen, cookie notice, tutorial prompt, etc.)
+2. What buttons or elements should be clicked to START playing?
+3. Are there any obstacles preventing gameplay? (ads, popups, age gates, etc.)
+
+Respond with a JSON object:
+{
+  "has_blocking_modal": true/false,
+  "modal_description": "description of what's blocking",
+  "recommended_action": "close_modal/click_start/click_new_game/dismiss_tutorial/skip_intro/click_play",
+  "action_target": "specific button text or description to click",
+  "reasoning": "why this action will get us to gameplay",
+  "confidence": 0.0-1.0
+}
+
+Examples:
+- If you see "Welcome! Would you like a tutorial?" → close_modal, target: "X button" or "Skip"
+- If you see "Click to Start" → click_start, target: "Start button"
+- If game is already visible with no overlays → "none", confidence: 1.0
+
+Be direct and actionable. We want to PLAY the game, not do tutorials.`;
+}
+
+/**
+ * Generate prompt for LLM-driven gameplay action selection
+ */
+export function generateGameplayActionPrompt(
+  gameUrl: string,
+  actionHistory: string[],
+  currentPhase: string
+): string {
+  return `You are an AI playing a browser game. Analyze the current screenshot and decide what action to take next.
+
+Game URL: ${gameUrl}
+Current Phase: ${currentPhase}
+
+Recent Actions Taken:
+${actionHistory.slice(-5).map((action, i) => `${i + 1}. ${action}`).join('\n')}
+
+Based on the screenshot, determine:
+1. What type of game is this? (puzzle, platformer, clicker, arcade, etc.)
+2. What controls does it likely use? (arrow keys, WASD, mouse clicks, spacebar, etc.)
+3. What should you do next to progress in the game?
+
+Respond with a JSON object:
+{
+  "game_type": "type of game detected",
+  "recommended_controls": ["list", "of", "control", "types"],
+  "next_action": "keyboard_arrows/keyboard_wasd/mouse_click/spacebar/combination",
+  "action_description": "brief explanation of what to do",
+  "confidence": 0.0-1.0
+}
+
+Be specific and practical. Choose actions that will actually progress the game.`;
+}
+
+/**
  * Create structured system prompt for the QA agent
  */
 export const QA_SYSTEM_PROMPT = `You are an expert QA engineer specializing in browser game testing.

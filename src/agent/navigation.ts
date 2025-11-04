@@ -7,15 +7,11 @@ import { logger } from '../utils/logger.js';
 import { NavigationError } from '../utils/errors.js';
 import { getConfig } from '../utils/config.js';
 import {
-  clickStartButton,
   detectGameOver,
   simulateGameplayInput,
   clickCenter,
-  performRandomClicks,
-  detectControls,
-  dismissModals,
   wait,
-  isGameVisible,
+  executeRecommendedAction,
 } from './interactions.js';
 import { captureScreenshot } from '../evidence/screenshots.js';
 import { isPageResponsive } from './browser.js';
@@ -41,47 +37,93 @@ export function createGameState(): GameState {
  */
 export async function navigateGame(
   sessionDir: string,
-  state: GameState
+  state: GameState,
+  gameUrl: string
 ): Promise<GameState> {
   const config = getConfig();
   logger.info('Starting autonomous game navigation');
 
   try {
+    // Import LLM analyzers
+    const { detectModal, findGameStart } = await import('../evaluation/analyzer.js');
+    const stagehand = (await import('./browser.js')).getBrowser();
+
     // Phase 1: Initial load
     state.phase = 'loading';
     await wait(2000); // Wait for initial render
 
-    // Dismiss any modals
-    await dismissModals();
-
-    // Capture initial screenshot
+    // Capture initial screenshot for LLM analysis
     const initialScreenshot = await captureScreenshot(sessionDir, 'initial_load', 'loading');
     state.screenshots.push(initialScreenshot);
     state.actionHistory.push('Captured initial screenshot');
 
-    // Phase 2: Check if game is visible
-    const gameVisible = await isGameVisible();
-    if (!gameVisible) {
-      logger.warn('Game canvas not immediately visible');
-      state.errors.push('Game canvas not detected');
+    // Phase 2: LLM-driven modal detection and dismissal
+    logger.info('Using LLM to detect and handle modals');
+    const modalDetection = await detectModal(initialScreenshot);
+    
+    if (modalDetection.has_modal && modalDetection.confidence > 0.5) {
+      logger.info('LLM detected modal, attempting to dismiss', {
+        type: modalDetection.modal_type,
+        action: modalDetection.recommended_action,
+      });
+      
+      try {
+        // Use Stagehand's act to execute LLM's recommendation
+        await stagehand.act({ action: modalDetection.recommended_action });
+        state.actionHistory.push(`Dismissed ${modalDetection.modal_type} modal: ${modalDetection.recommended_action}`);
+        await wait(2000);
+        
+        // Capture screenshot after modal dismissal
+        const postModalScreenshot = await captureScreenshot(sessionDir, 'after_modal_dismiss', 'loading');
+        state.screenshots.push(postModalScreenshot);
+      } catch (error) {
+        logger.warn('Failed to dismiss modal with LLM action', { error: (error as Error).message });
+        // Continue anyway
+      }
     }
 
-    // Phase 3: Try to start the game
+    // Phase 3: LLM-driven game start detection
     state.phase = 'start_screen';
-    logger.info('Attempting to start game');
+    logger.info('Using LLM to find how to start the game');
+    
+    const latestScreenshot = state.screenshots[state.screenshots.length - 1];
+    const gameStartInfo = await findGameStart(latestScreenshot, state.actionHistory);
+    
+    logger.info('LLM game start analysis', {
+      state: gameStartInfo.game_state,
+      mechanism: gameStartInfo.start_mechanism,
+      confidence: gameStartInfo.confidence,
+    });
 
-    const startClicked = await clickStartButton();
-    if (startClicked) {
-      state.actionHistory.push('Clicked start button');
-      await wait(2000);
+    if (gameStartInfo.game_state === 'already_started') {
+      logger.info('LLM detected game is already playing');
+      state.actionHistory.push('LLM: Game already started, no action needed');
+    } else if (gameStartInfo.confidence > 0.5) {
+      // Execute LLM's recommendation to start the game
+      try {
+        await stagehand.act({ action: gameStartInfo.start_mechanism });
+        state.actionHistory.push(`LLM start game: ${gameStartInfo.start_mechanism}`);
+        await wait(2000);
+        state.actionCount++;
 
-      const startScreenshot = await captureScreenshot(sessionDir, 'after_start', 'start_screen');
-      state.screenshots.push(startScreenshot);
-      state.actionCount++;
+        const startScreenshot = await captureScreenshot(sessionDir, 'after_start', 'start_screen');
+        state.screenshots.push(startScreenshot);
+      } catch (error) {
+        logger.warn('Failed to start game with LLM action, trying fallback', {
+          error: (error as Error).message,
+        });
+        
+        // Fallback: click center
+        await clickCenter();
+        state.actionHistory.push('Fallback: Clicked center of viewport');
+        await wait(1000);
+        state.actionCount++;
+      }
     } else {
-      logger.info('No start button found, attempting center click');
+      // Low confidence, use fallback
+      logger.info('LLM confidence too low, using fallback start method');
       await clickCenter();
-      state.actionHistory.push('Clicked center of viewport');
+      state.actionHistory.push('Fallback: Clicked center (low LLM confidence)');
       await wait(1000);
       state.actionCount++;
     }
@@ -90,7 +132,7 @@ export async function navigateGame(
     state.phase = 'gameplay';
     logger.info('Entering gameplay phase');
 
-    await conductGameplaySession(sessionDir, state, config.maxActionCount);
+    await conductGameplaySession(sessionDir, state, config.maxActionCount, gameUrl);
 
     // Phase 5: Check final state
     const isGameOver = await detectGameOver();
@@ -123,19 +165,18 @@ export async function navigateGame(
 }
 
 /**
- * Conduct an active gameplay session
+ * Conduct an active gameplay session with LLM-driven actions
  */
 async function conductGameplaySession(
   sessionDir: string,
   state: GameState,
-  maxActions: number
+  maxActions: number,
+  gameUrl: string
 ): Promise<void> {
-  logger.info('Starting gameplay session', { maxActions });
-
-  const controls = await detectControls();
-  const hasKeyboard = controls.includes('keyboard');
-
-  const screenshotInterval = Math.floor(maxActions / 4); // Take ~4 screenshots during gameplay
+  logger.info('Starting LLM-driven gameplay session', { maxActions });
+  
+  // Import here to avoid circular dependency
+  const { getGameplayAction } = await import('../evaluation/analyzer.js');
 
   for (let i = 0; i < maxActions && state.actionCount < maxActions; i++) {
     try {
@@ -154,28 +195,38 @@ async function conductGameplaySession(
         break;
       }
 
-      // Perform gameplay actions
-      if (hasKeyboard) {
-        // Keyboard-based gameplay
-        await simulateGameplayInput(3000); // 3 seconds of input
-        state.actionHistory.push('Simulated keyboard gameplay (3s)');
-        state.actionCount += 5; // Count as multiple actions
-      } else {
-        // Click-based gameplay
-        await performRandomClicks(3, 800);
-        state.actionHistory.push('Performed random clicks');
-        state.actionCount += 3;
-      }
-
-      // Capture screenshot at intervals
-      if (i % screenshotInterval === 0 && state.screenshots.length < 10) {
-        const screenshot = await captureScreenshot(
+      // Capture screenshot for LLM analysis (every 3 iterations or if we have none)
+      let currentScreenshot = state.screenshots[state.screenshots.length - 1];
+      if (!currentScreenshot || i % 3 === 0) {
+        currentScreenshot = await captureScreenshot(
           sessionDir,
           `gameplay_${i}`,
           'gameplay'
         );
-        state.screenshots.push(screenshot);
+        state.screenshots.push(currentScreenshot);
       }
+
+      // Get LLM recommendation for next action
+      const recommendation = await getGameplayAction(
+        gameUrl,
+        currentScreenshot,
+        state.actionHistory,
+        state.phase
+      );
+
+      logger.info('LLM recommended action', {
+        action: recommendation.action_type,
+        description: recommendation.description,
+        confidence: recommendation.confidence,
+      });
+
+      // Execute the recommended action
+      await executeRecommendedAction(recommendation.action_type, 3000);
+      
+      state.actionHistory.push(
+        `LLM action: ${recommendation.action_type} - ${recommendation.description}`
+      );
+      state.actionCount += 5;
 
       state.lastActionTime = Date.now();
 
@@ -188,12 +239,19 @@ async function conductGameplaySession(
         await attemptUnstick(state);
       }
     } catch (error) {
-      logger.warn('Error during gameplay action', {
+      logger.warn('Error during gameplay action, falling back to simple controls', {
         error: (error as Error).message,
         action: i,
       });
-      state.errors.push(`Gameplay error: ${(error as Error).message}`);
-      // Continue with next action
+      
+      // Fallback to simple keyboard controls
+      try {
+        await simulateGameplayInput(3000);
+        state.actionHistory.push('Fallback: keyboard input');
+        state.actionCount += 3;
+      } catch (fallbackError) {
+        state.errors.push(`Gameplay error: ${(error as Error).message}`);
+      }
     }
   }
 
@@ -229,12 +287,12 @@ async function attemptUnstick(state: GameState): Promise<void> {
   logger.info('Attempting to unstick game');
 
   try {
-    // Try clicking center
+    // Try clicking center and some key presses
     await clickCenter();
     await wait(500);
 
-    // Try some random clicks
-    await performRandomClicks(2, 500);
+    // Try some keyboard input
+    await simulateGameplayInput(1000);
 
     state.actionHistory.push('Attempted unstick maneuver');
   } catch (error) {

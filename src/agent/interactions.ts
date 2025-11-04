@@ -181,17 +181,21 @@ export async function simulateGameplayInput(durationMs: number = 5000): Promise<
   logger.info('Simulating gameplay input', { durationMs });
 
   const startTime = Date.now();
-  const commonKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'w', 'a', 's', 'd'];
+  // Focus on arrow keys for games like 2048
+  const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+  const allKeys = [...arrowKeys, 'Space', 'w', 'a', 's', 'd'];
 
   try {
     while (Date.now() - startTime < durationMs) {
-      // Pick random key
-      const key = commonKeys[Math.floor(Math.random() * commonKeys.length)];
+      // 70% chance to use arrow keys, 30% other keys
+      const useArrow = Math.random() < 0.7;
+      const keySet = useArrow ? arrowKeys : allKeys;
+      const key = keySet[Math.floor(Math.random() * keySet.length)];
 
-      await pressKey(key, 200);
+      await pressKey(key, 100); // Shorter hold time
 
-      // Random delay between inputs
-      const delay = Math.random() * 500 + 300; // 300-800ms
+      // Shorter delay between inputs for more responsive feel
+      const delay = Math.random() * 400 + 200; // 200-600ms
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
@@ -379,6 +383,96 @@ export async function isGameVisible(): Promise<boolean> {
   } catch (error) {
     logger.warn('Error checking game visibility', { error: (error as Error).message });
     return false;
+  }
+}
+
+/**
+ * Execute action based on LLM recommendation
+ */
+export async function executeRecommendedAction(
+  actionType: string,
+  durationMs: number = 3000
+): Promise<void> {
+  logger.info('Executing LLM-recommended action', { actionType, durationMs });
+
+  try {
+    switch (actionType.toLowerCase()) {
+      case 'keyboard_arrows':
+        await simulateGameplayInput(durationMs);
+        break;
+
+      case 'keyboard_wasd':
+        await simulateWASDInput(durationMs);
+        break;
+
+      case 'mouse_click':
+      case 'mouse_clicks':
+        await performRandomClicks(Math.floor(durationMs / 800), 800);
+        break;
+
+      case 'spacebar':
+        await simulateSpacebarInput(durationMs);
+        break;
+
+      case 'combination':
+        // Mix of keyboard and clicks
+        await simulateGameplayInput(durationMs / 2);
+        await performRandomClicks(2, 500);
+        break;
+
+      default:
+        logger.warn('Unknown action type, defaulting to arrows', { actionType });
+        await simulateGameplayInput(durationMs);
+    }
+
+    logger.info('Action executed successfully', { actionType });
+  } catch (error) {
+    const err = error as Error;
+    logger.error('Failed to execute recommended action', err, { actionType });
+    throw new InteractionError(`Action execution failed: ${err.message}`, actionType);
+  }
+}
+
+/**
+ * Simulate WASD key inputs
+ */
+async function simulateWASDInput(durationMs: number): Promise<void> {
+  logger.info('Simulating WASD input', { durationMs });
+
+  const startTime = Date.now();
+  const wasdKeys = ['w', 'a', 's', 'd'];
+
+  try {
+    while (Date.now() - startTime < durationMs) {
+      const key = wasdKeys[Math.floor(Math.random() * wasdKeys.length)];
+      await pressKey(key, 100);
+
+      const delay = Math.random() * 400 + 200;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  } catch (error) {
+    logger.warn('WASD simulation interrupted', { error: (error as Error).message });
+  }
+}
+
+/**
+ * Simulate spacebar presses (for jumping, shooting, etc.)
+ */
+async function simulateSpacebarInput(durationMs: number): Promise<void> {
+  logger.info('Simulating spacebar input', { durationMs });
+
+  const startTime = Date.now();
+
+  try {
+    while (Date.now() - startTime < durationMs) {
+      await pressKey('Space', 100);
+
+      // Random delay between 500ms-1500ms
+      const delay = Math.random() * 1000 + 500;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  } catch (error) {
+    logger.warn('Spacebar simulation interrupted', { error: (error as Error).message });
   }
 }
 

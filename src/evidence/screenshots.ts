@@ -42,9 +42,11 @@ export async function captureScreenshot(
   const captureOperation = async (): Promise<Screenshot> => {
     try {
       const stagehand = getBrowser();
+      
       const screenshot = await stagehand.page.screenshot({
         type: 'png',
-        fullPage: false, // Only visible viewport
+        fullPage: false,
+        timeout: 30000,
       });
 
       await saveFile(filepath, screenshot);

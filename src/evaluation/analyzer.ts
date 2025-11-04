@@ -16,6 +16,10 @@ import {
   generateLoadSuccessPrompt,
   generateControlsPrompt,
   generateStabilityPrompt,
+  generateGameplayActionPrompt,
+  generateInitialNavigationPrompt,
+  generateModalDetectionPrompt,
+  generateGameStartPrompt,
 } from './prompts.js';
 
 /**
@@ -282,6 +286,259 @@ export async function evaluatePlayability(
     const err = error as Error;
     logger.error('Playability evaluation failed', err);
     throw new EvaluationError(`Playability evaluation failed: ${err.message}`);
+  }
+}
+
+/**
+ * Detect and handle modals using LLM
+ */
+export async function detectModal(
+  currentScreenshot: Screenshot
+): Promise<{
+  has_modal: boolean;
+  modal_type: string;
+  recommended_action: string;
+  confidence: number;
+}> {
+  logger.info('Using LLM to detect modals');
+
+  try {
+    const model = getLLMModel();
+    const prompt = generateModalDetectionPrompt();
+    const images = await prepareScreenshotsForLLM([currentScreenshot]);
+
+    const result = await generateText({
+      model,
+      system: 'You are analyzing a browser game interface to detect blocking modals or overlays.',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...images,
+          ],
+        },
+      ],
+    });
+
+    const parsed = parseLLMResponse<{
+      has_modal: boolean;
+      modal_type: string;
+      recommended_action: string;
+      confidence: number;
+    }>(result.text);
+
+    logger.info('LLM modal detection', {
+      has_modal: parsed.has_modal,
+      modal_type: parsed.modal_type,
+      action: parsed.recommended_action,
+      confidence: parsed.confidence,
+    });
+
+    return parsed;
+  } catch (error) {
+    const err = error as Error;
+    logger.warn('Failed to detect modal with LLM', { error: err.message });
+    return {
+      has_modal: false,
+      modal_type: 'none',
+      recommended_action: 'none',
+      confidence: 0,
+    };
+  }
+}
+
+/**
+ * Find how to start the game using LLM
+ */
+export async function findGameStart(
+  currentScreenshot: Screenshot,
+  actionHistory: string[]
+): Promise<{
+  game_state: string;
+  start_mechanism: string;
+  confidence: number;
+}> {
+  logger.info('Using LLM to find game start mechanism');
+
+  try {
+    const model = getLLMModel();
+    const prompt = generateGameStartPrompt(actionHistory);
+    const images = await prepareScreenshotsForLLM([currentScreenshot]);
+
+    const result = await generateText({
+      model,
+      system: 'You are analyzing a browser game to determine how to start playing.',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...images,
+          ],
+        },
+      ],
+    });
+
+    const parsed = parseLLMResponse<{
+      game_state: string;
+      start_mechanism: string;
+      confidence: number;
+    }>(result.text);
+
+    logger.info('LLM game start detection', {
+      game_state: parsed.game_state,
+      mechanism: parsed.start_mechanism,
+      confidence: parsed.confidence,
+    });
+
+    return parsed;
+  } catch (error) {
+    const err = error as Error;
+    logger.warn('Failed to find game start with LLM', { error: err.message });
+    return {
+      game_state: 'unknown',
+      start_mechanism: 'Click anywhere to start',
+      confidence: 0.1,
+    };
+  }
+}
+
+/**
+ * Get LLM analysis of initial page to navigate to gameplay
+ */
+export async function analyzeInitialNavigation(
+  gameUrl: string,
+  initialScreenshot: Screenshot
+): Promise<{
+  has_blocking_modal: boolean;
+  modal_description: string;
+  recommended_action: string;
+  action_target: string;
+  reasoning: string;
+  confidence: number;
+}> {
+  logger.info('Getting LLM initial navigation analysis');
+
+  try {
+    const model = getLLMModel();
+    const prompt = generateInitialNavigationPrompt(gameUrl);
+    const images = await prepareScreenshotsForLLM([initialScreenshot]);
+
+    const result = await generateText({
+      model,
+      system: 'You are an AI QA agent. Analyze the initial page and determine how to get to gameplay.',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...images,
+          ],
+        },
+      ],
+    });
+
+    const parsed = parseLLMResponse<{
+      has_blocking_modal: boolean;
+      modal_description: string;
+      recommended_action: string;
+      action_target: string;
+      reasoning: string;
+      confidence: number;
+    }>(result.text);
+
+    logger.info('LLM initial navigation analysis', {
+      has_modal: parsed.has_blocking_modal,
+      action: parsed.recommended_action,
+      target: parsed.action_target,
+      confidence: parsed.confidence,
+    });
+
+    return parsed;
+  } catch (error) {
+    const err = error as Error;
+    logger.warn('Failed to get LLM navigation analysis', {
+      error: err.message,
+    });
+    
+    // Fallback: assume no modal
+    return {
+      has_blocking_modal: false,
+      modal_description: 'Unable to analyze',
+      recommended_action: 'none',
+      action_target: '',
+      reasoning: 'LLM analysis failed, proceeding without navigation',
+      confidence: 0.1,
+    };
+  }
+}
+
+/**
+ * Get LLM recommendation for next gameplay action
+ */
+export async function getGameplayAction(
+  gameUrl: string,
+  currentScreenshot: Screenshot,
+  actionHistory: string[],
+  currentPhase: string
+): Promise<{
+  action_type: string;
+  description: string;
+  confidence: number;
+}> {
+  logger.info('Getting LLM gameplay recommendation');
+
+  try {
+    const model = getLLMModel();
+    const prompt = generateGameplayActionPrompt(gameUrl, actionHistory, currentPhase);
+    const images = await prepareScreenshotsForLLM([currentScreenshot]);
+
+    const result = await generateText({
+      model,
+      system: 'You are an AI agent playing browser games. Analyze the game and decide the best action to take.',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            ...images,
+          ],
+        },
+      ],
+    });
+
+    const parsed = parseLLMResponse<{
+      game_type: string;
+      recommended_controls: string[];
+      next_action: string;
+      action_description: string;
+      confidence: number;
+    }>(result.text);
+
+    logger.info('LLM gameplay recommendation', {
+      action: parsed.next_action,
+      description: parsed.action_description,
+      confidence: parsed.confidence,
+    });
+
+    return {
+      action_type: parsed.next_action,
+      description: parsed.action_description,
+      confidence: parsed.confidence,
+    };
+  } catch (error) {
+    const err = error as Error;
+    logger.warn('Failed to get LLM gameplay recommendation, falling back to defaults', {
+      error: err.message,
+    });
+    
+    // Fallback to keyboard controls
+    return {
+      action_type: 'keyboard_arrows',
+      description: 'Fallback to arrow key controls',
+      confidence: 0.3,
+    };
   }
 }
 
