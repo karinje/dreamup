@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Test Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+        }
+        
+        #game-container {
+            text-align: center;
+        }
+        
+        #start-screen {
+            background: #0f3460;
+            padding: 40px;
+            border-radius: 10px;
+            color: white;
+        }
+        
+        #start-button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        
+        #start-button:hover {
+            background: #ff6584;
+        }
+        
+        canvas {
+            border: 2px solid #e94560;
+            display: none;
+        }
+        
+        #score {
+            color: white;
+            font-size: 24px;
+            margin-top: 20px;
+        }
+        
+        #game-over {
+            display: none;
+            background: #0f3460;
+            padding: 40px;
+            border-radius: 10px;
+            color: white;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="start-screen">
+            <h1>🎮 Simple Test Game</h1>
+            <p>Click the square to score points!</p>
+            <button id="start-button">Start Game</button>
+        </div>
+        
+        <canvas id="game-canvas" width="600" height="400"></canvas>
+        <div id="score">Score: 0</div>
+        
+        <div id="game-over">
+            <h2>Game Over!</h2>
+            <p id="final-score"></p>
+            <button id="restart-button">Play Again</button>
+        </div>
+    </div>
+    
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const startButton = document.getElementById('start-button');
+        const scoreDisplay = document.getElementById('score');
+        const gameOverScreen = document.getElementById('game-over');
+        const restartButton = document.getElementById('restart-button');
+        const finalScoreDisplay = document.getElementById('final-score');
+        
+        let score = 0;
+        let gameActive = false;
+        let targetX = 0;
+        let targetY = 0;
+        let targetSize = 50;
+        let gameTime = 0;
+        let maxGameTime = 30000; // 30 seconds
+        
+        function startGame() {
+            startScreen.classList.add('hidden');
+            canvas.style.display = 'block';
+            scoreDisplay.style.display = 'block';
+            gameOverScreen.classList.add('hidden');
+            
+            score = 0;
+            gameTime = 0;
+            gameActive = true;
+            updateScore();
+            spawnTarget();
+            gameLoop();
+        }
+        
+        function spawnTarget() {
+            targetX = Math.random() * (canvas.width - targetSize);
+            targetY = Math.random() * (canvas.height - targetSize);
+        }
+        
+        function updateScore() {
+            scoreDisplay.textContent = `Score: ${score}`;
+        }
+        
+        function gameLoop() {
+            if (!gameActive) return;
+            
+            // Clear canvas
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw target
+            ctx.fillStyle = '#e94560';
+            ctx.fillRect(targetX, targetY, targetSize, targetSize);
+            
+            // Update game time
+            gameTime += 16; // Roughly 60fps
+            
+            // End game after time limit
+            if (gameTime >= maxGameTime) {
+                endGame();
+                return;
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        function endGame() {
+            gameActive = false;
+            canvas.style.display = 'none';
+            scoreDisplay.style.display = 'none';
+            gameOverScreen.classList.remove('hidden');
+            finalScoreDisplay.textContent = `Your score: ${score}`;
+        }
+        
+        // Event listeners
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+        
+        canvas.addEventListener('click', (e) => {
+            if (!gameActive) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Check if click is within target
+            if (x >= targetX && x <= targetX + targetSize &&
+                y >= targetY && y <= targetY + targetSize) {
+                score++;
+                updateScore();
+                spawnTarget();
+            }
+        });
+        
+        console.log('Simple Test Game loaded successfully');
+    </script>
+</body>
+</html>
+
