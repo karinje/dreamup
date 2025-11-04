@@ -28,10 +28,15 @@
 - Handle more edge cases (complex game UIs, unusual controls)
 
 ### ⏸️ Future Enhancements
-- GIF recording of gameplay sessions
+- ✅ GIF recording of gameplay sessions (PR-21 complete)
 - Batch testing multiple games sequentially
 - Advanced metrics (FPS, load time, accessibility)
 - Enhanced web dashboard with filtering and search
+- **Cloud Deployment** (Express on Railway/Render or Firebase Functions)
+  - Deploy backend for remote access
+  - Web UI to submit game URLs and view reports
+  - Real-time progress updates via WebSocket
+  - Cloud storage for screenshots/GIFs (Firebase Storage or S3)
 
 ---
 
@@ -581,9 +586,10 @@ dreamup/
 
 ---
 
-#### **PR-21: GIF Recording** *(Optional)* ⏸️
+#### **PR-21: GIF Recording** *(Optional)* ✅ COMPLETE
 **Priority:** P2 (Nice to have)  
-**Status:** Not started  
+**Status:** ✅ Completed November 4, 2025  
+**Description:** Create animated GIFs from gameplay screenshots
 
 ---
 
@@ -602,6 +608,37 @@ dreamup/
 #### **PR-24: Web Dashboard** *(Optional)* ⏸️
 **Priority:** P3 (Low priority)  
 **Status:** Not started  
+
+---
+
+#### **PR-25: Cloud Deployment & Remote Testing** *(Future)* ⏸️
+**Priority:** P3 (Future enhancement)  
+**Status:** Not started  
+**Description:** Deploy system for remote access and cloud-based testing
+
+**Options:**
+1. **Express + Railway/Render**
+   - Deploy current Node.js backend
+   - Add POST endpoint for test submission
+   - WebSocket for real-time progress
+   - Store results in cloud storage
+
+2. **Firebase (Serverless)**
+   - Cloud Functions for test execution
+   - Firestore for reports database
+   - Firebase Storage for screenshots/GIFs
+   - Firebase Hosting for web UI
+   - Real-time database for progress updates
+
+**Tasks:**
+- [ ] Add API endpoint: POST `/api/test` (accepts game URL)
+- [ ] Implement WebSocket for progress streaming
+- [ ] Add web form to submit game URLs
+- [ ] Setup cloud storage for artifacts
+- [ ] Configure deployment pipeline
+- [ ] Add authentication/rate limiting
+
+**Deliverable:** Publicly accessible web app for remote testing
 
 ---
 

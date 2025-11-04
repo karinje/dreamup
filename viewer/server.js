@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { readdir, readFile } from 'fs/promises';
+import { readdir, readFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -16,9 +16,50 @@ const app = express();
 const PORT = 3001;
 const OUTPUT_DIR = join(__dirname, '..', 'output');
 
-// Serve static files
-app.use('/output', express.static(OUTPUT_DIR));
-app.use(express.static(join(__dirname, 'public')));
+// Middleware
+app.use(express.json());
+
+// Log all requests
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path}`);
+  next();
+});
+
+// API: Delete report (MUST come before static file serving and other routes)
+app.delete('/api/reports/*', async (req, res) => {
+  console.log(`🔥 DELETE route hit!`);
+  console.log(`   Full URL: ${req.originalUrl}`);
+  console.log(`   Path: ${req.path}`);
+  console.log(`   Params[0]: ${req.params[0]}`);
+  
+  try {
+    // Extract ID from path (everything after /api/reports/)
+    const reportId = req.params[0];
+    const reportDir = join(OUTPUT_DIR, reportId);
+    
+    console.log(`🗑️  Attempting to delete: ${reportDir}`);
+    
+    // Check if directory exists
+    const { access } = await import('fs/promises');
+    try {
+      await access(reportDir);
+      console.log(`✓ Directory exists`);
+    } catch (err) {
+      console.log(`✗ Directory not found: ${err.message}`);
+      return res.status(404).json({ error: 'Report not found' });
+    }
+    
+    // Delete entire directory recursively
+    await rm(reportDir, { recursive: true, force: true });
+    
+    console.log(`✅ Deleted report: ${reportId}`);
+    res.json({ success: true, message: 'Report deleted successfully' });
+  } catch (error) {
+    console.error(`❌ Failed to delete report:`, error.message);
+    console.error(error.stack);
+    res.status(500).json({ error: 'Failed to delete report', details: error.message });
+  }
+});
 
 // API: Get all reports
 app.get('/api/reports', async (req, res) => {
@@ -79,6 +120,10 @@ app.get('/api/reports/:id/logs', async (req, res) => {
     res.status(404).json({ error: 'Logs not found' });
   }
 });
+
+// Serve static files (MUST come after API routes)
+app.use('/output', express.static(OUTPUT_DIR));
+app.use(express.static(join(__dirname, 'public')));
 
 app.listen(PORT, () => {
   console.log(`\n🎮 DreamUp QA Viewer running at http://localhost:${PORT}`);
