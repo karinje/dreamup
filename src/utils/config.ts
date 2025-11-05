@@ -83,8 +83,8 @@ export function loadConfig(): AgentConfig {
     logLevel: (process.env.LOG_LEVEL || 'info') as LogLevel,
 
     // Optional
-    enableGifRecording: parseBoolean(process.env.ENABLE_GIF_RECORDING, false),
-    gifMaxDuration: parseNumber(process.env.GIF_MAX_DURATION_SEC, 30),
+    enableGifRecording: parseBoolean(process.env.ENABLE_GIF_RECORDING, true), // Default to true for testing
+    gifMaxDuration: parseNumber(process.env.GIF_MAX_DURATION_SEC, 60), // Increased to 60s for slow games
   };
 
   return config;

@@ -6,6 +6,7 @@ import { getBrowser } from './browser.js';
 import { logger } from '../utils/logger.js';
 import { retry, INTERACTION_RETRY } from '../utils/retry.js';
 import { InteractionError } from '../utils/errors.js';
+import { ControlScheme } from '../types/index.js';
 
 /**
  * Common button text patterns for start/play buttons
@@ -176,20 +177,51 @@ export async function pressKeySequence(keys: string[], delayMs: number = 500): P
 
 /**
  * Simulate common game controls (arrow keys, WASD, spacebar)
+ * If controlScheme is provided, prioritize those controls
  */
-export async function simulateGameplayInput(durationMs: number = 5000): Promise<void> {
-  logger.info('Simulating gameplay input', { durationMs });
+export async function simulateGameplayInput(
+  durationMs: number = 5000,
+  controlScheme: ControlScheme | null = null,
+): Promise<void> {
+  logger.info('Simulating gameplay input', {
+    durationMs,
+    hasControlScheme: !!controlScheme,
+    source: controlScheme?.source,
+  });
 
   const startTime = Date.now();
-  // Focus on arrow keys for games like 2048
+
+  // Get prioritized keys from control scheme if available
+  let prioritizedKeys: string[] = [];
+  if (controlScheme) {
+    // Extract all keys from control scheme
+    for (const action of controlScheme.actions) {
+      prioritizedKeys.push(...action.keys);
+    }
+    for (const axis of controlScheme.axes) {
+      prioritizedKeys.push(...axis.keys);
+    }
+
+    // Remove duplicates
+    prioritizedKeys = Array.from(new Set(prioritizedKeys));
+
+    logger.info('Using control hints', {
+      prioritizedKeys,
+      actionsCount: controlScheme.actions.length,
+      axesCount: controlScheme.axes.length,
+    });
+  }
+
+  // Default keys if no hints provided
   const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-  const allKeys = [...arrowKeys, 'Space', 'w', 'a', 's', 'd'];
+  const defaultKeys = [...arrowKeys, 'Space', 'w', 'a', 's', 'd'];
 
   try {
     while (Date.now() - startTime < durationMs) {
-      // 70% chance to use arrow keys, 30% other keys
-      const useArrow = Math.random() < 0.7;
-      const keySet = useArrow ? arrowKeys : allKeys;
+      // If we have hints, use them 90% of the time, otherwise fall back to exploration
+      const useHints = prioritizedKeys.length > 0 && Math.random() < 0.9;
+      const keySet = useHints ? prioritizedKeys : (Math.random() < 0.7 ? arrowKeys : defaultKeys);
+
       const key = keySet[Math.floor(Math.random() * keySet.length)];
 
       await pressKey(key, 100); // Shorter hold time
@@ -199,7 +231,9 @@ export async function simulateGameplayInput(durationMs: number = 5000): Promise<
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
-    logger.info('Gameplay simulation complete');
+    logger.info('Gameplay simulation complete', {
+      usedHints: prioritizedKeys.length > 0,
+    });
   } catch (error) {
     logger.warn('Gameplay simulation interrupted', { error: (error as Error).message });
   }

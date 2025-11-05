@@ -326,31 +326,108 @@ Be direct and actionable. We want to PLAY the game, not do tutorials.`;
 export function generateGameplayActionPrompt(
   gameUrl: string,
   actionHistory: string[],
-  currentPhase: string
+  currentPhase: string,
+  controlScheme?: any,
+  hasTemporalContext?: boolean,
+  gameContext?: string
 ): string {
-  return `You are an AI playing a browser game. Analyze the current screenshot and decide what action to take next.
+  // Build game-specific context section if provided
+  let gameContextSection = '';
+  if (gameContext) {
+    gameContextSection = `
+⚠️ GAME-SPECIFIC INSTRUCTIONS (CRITICAL):
+${gameContext}
+
+`;
+  }
+
+  // Build control scheme section if provided
+  let controlsSection = '';
+  if (controlScheme && controlScheme.source === 'hints') {
+    controlsSection = '\n## THIS GAME\'S CONTROLS (from input hints):\n\n';
+    
+    if (controlScheme.actions && controlScheme.actions.length > 0) {
+      controlsSection += '**Actions:**\n';
+      controlScheme.actions.forEach((action: any) => {
+        controlsSection += `- ${action.name}: ${action.keys.join(', ')}`;
+        if (action.buttons && action.buttons.length > 0) {
+          controlsSection += ` (or buttons: ${action.buttons.join(', ')})`;
+        }
+        controlsSection += '\n';
+      });
+      controlsSection += '\n';
+    }
+    
+    if (controlScheme.axes && controlScheme.axes.length > 0) {
+      controlsSection += '**Axes (movement):**\n';
+      controlScheme.axes.forEach((axis: any) => {
+        controlsSection += `- ${axis.name} (${axis.type}D): ${axis.keys.join(', ')}\n`;
+      });
+      controlsSection += '\n';
+    }
+    
+    controlsSection += '**IMPORTANT: ONLY use the keys listed above! Other keys will not work in this game.**\n';
+  } else {
+    controlsSection = `
+Key names you can use:
+- Arrow keys: "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"
+- WASD: "w", "a", "s", "d"
+- Special: "Space", "Enter", "Escape"
+- Letters: "a"-"z" (lowercase)
+`;
+  }
+
+  const temporalContextSection = hasTemporalContext ? `
+## TEMPORAL CONTEXT (VERY IMPORTANT!):
+You are seeing multiple frames labeled T-2, T-1, and T (current):
+- **T-2** = Oldest frame (2 turns ago)
+- **T-1** = Previous frame (1 turn ago) 
+- **T** = Current frame (now)
+
+**By comparing these frames, you MUST determine:**
+1. Which direction is the player/character CURRENTLY moving?
+2. What is the player's velocity/trajectory?
+3. Where will the player be in the NEXT frame if you don't change direction?
+
+**CRITICAL:** If you see the player getting closer to a wall/obstacle across frames, you MUST turn away IMMEDIATELY!
+Look at the player's position changing across T-2 → T-1 → T to understand movement direction.
+
+` : `
+## SINGLE FRAME:
+You are seeing a single screenshot. Since you don't have temporal context, be conservative with your decisions.
+`;
+
+  return `You are an AI playing a browser game. Analyze the screenshot(s) and decide EXACTLY what keys to press next.
 
 Game URL: ${gameUrl}
 Current Phase: ${currentPhase}
 
 Recent Actions Taken:
-${actionHistory.slice(-5).map((action, i) => `${i + 1}. ${action}`).join('\n')}
+${actionHistory.slice(-5).map((action, i) => `${i + 1}. ${action}`).join('\n') || 'None yet'}
+${gameContextSection}${temporalContextSection}
+${controlsSection}
+Based on the screenshot(s), determine:
+1. What type of game is this?
+2. What is the current game state? (player position, obstacles, goals, dangers, etc.)
+3. What SPECIFIC keys should be pressed next to achieve the game's objective?
+4. What should you AVOID? (walls, enemies, hazards, death, game over, etc.)
 
-Based on the screenshot, determine:
-1. What type of game is this? (puzzle, platformer, clicker, arcade, etc.)
-2. What controls does it likely use? (arrow keys, WASD, mouse clicks, spacebar, etc.)
-3. What should you do next to progress in the game?
+CRITICAL STRATEGY RULES:
+- Identify the game's WIN condition (collect items, reach goal, survive, etc.)
+- Identify DEATH/FAIL conditions (walls, enemies, falling, time up, etc.)
+- Plan ahead - don't just move toward immediate goals, avoid traps!
+- If approaching danger (wall, edge, enemy), change direction BEFORE it's too late!
 
 Respond with a JSON object:
 {
   "game_type": "type of game detected",
-  "recommended_controls": ["list", "of", "control", "types"],
-  "next_action": "keyboard_arrows/keyboard_wasd/mouse_click/spacebar/combination",
-  "action_description": "brief explanation of what to do",
+  "game_state": "brief description: player position, goals visible, dangers nearby",
+  "keys_to_press": ["ArrowUp"],
+  "reasoning": "why these keys achieve the objective while avoiding death/failure",
   "confidence": 0.0-1.0
 }
 
-Be specific and practical. Choose actions that will actually progress the game.`;
+Return 1-3 keys maximum (usually just 1). Be strategic - survival first, then objectives!`;
 }
 
 /**

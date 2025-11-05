@@ -3,7 +3,15 @@
  */
 
 export { runQA } from './index.js';
-export type { QAReport, QAOptions, TestConfig, Issue, TestMetadata } from './types/index.js';
+export type {
+  QAReport,
+  QAOptions,
+  TestConfig,
+  Issue,
+  TestMetadata,
+  InputHints,
+  ControlScheme,
+} from './types/index.js';
 
 /**
  * Lambda handler example (can be imported by users)

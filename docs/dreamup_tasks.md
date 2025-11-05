@@ -1,10 +1,13 @@
 # DreamUp QA Agent - Implementation Tasks & File Structure
 
 ## Document Control
-- **Version:** 2.0
+- **Version:** 2.1
 - **Date:** November 4, 2025
-- **Status:** ✅ Core Implementation Complete (PR-01 through PR-17)
-- **Related:** DreamUp QA Pipeline PRD v1.0
+- **Status:** ✅ Core Implementation Complete (PR-01 through PR-17), 🟡 PR-08b Pending (Input Hints)
+- **Related:** DreamUp QA Pipeline PRD v1.1
+- **Change Log:**
+  - v2.1 (Nov 4): Added PR-08b for Input Control Hints feature (project overview v1.3 requirement)
+  - v2.0 (Nov 4): Core implementation complete
 
 ---
 
@@ -20,7 +23,11 @@
 - **Test Fixtures**: Simple game created
 - **Known Limitations**: Browserbase headless mode cannot render custom fonts for some games (e.g., gabrielecirulli/2048)
 
-### 🟡 What Remains (Optional)
+### 🟡 What Remains
+- **PR-08b: Input Control Hints** (NEW REQUIREMENT from v1.3)
+  - Accept JavaScript snippet or semantic description of game controls
+  - Parse and prioritize hinted controls during testing
+  - Support first-party (DreamUp-generated) and third-party games
 - Unit tests for core modules
 - Integration tests for full workflows
 - Demo video creation
@@ -292,6 +299,66 @@ dreamup/
 ```
 
 **Deliverable:** ✅ Can simulate basic gameplay on keyboard-controlled games
+
+---
+
+#### **PR-08b: Input Control Hints** 🟡 NEW REQUIREMENT (v1.3)
+**Priority:** P1 (High)  
+**Status:** 🟡 Pending Implementation  
+**Description:** Accept and use input control hints from game-building agent
+
+**Tasks:**
+- [ ] Add `inputHints` parameter to TestOptions interface
+- [ ] Parse JavaScript snippet format (first-party games)
+  - [ ] Extract Actions (createAction, bindKey, bindVirtualButton)
+  - [ ] Extract Axes (createAxis, createAxis2D, setSmoothing)
+  - [ ] Map to control scheme (keyboard keys, mouse buttons, virtual controls)
+- [ ] Parse semantic descriptions (third-party games)
+  - [ ] Example: "arrow keys for movement, spacebar to jump"
+  - [ ] Convert to prioritized action list
+- [ ] Integrate hints into interaction strategy
+  - [ ] Prioritize hinted controls during auto-detection
+  - [ ] Fall back to standard detection if hints fail
+  - [ ] Log which controls were discovered via hints vs auto-detection
+- [ ] Add unit tests for parsing both hint formats
+- [ ] Update documentation with hint examples
+
+**Files to Modify:**
+```
+🟡 src/types/index.ts (add InputHints interface)
+🟡 src/agent/interactions.ts (use hints in control detection)
+🟡 src/index.ts (accept hints in main function)
+🟡 src/api.ts (add hints to TestOptions)
+🟡 src/cli.ts (optional: accept hints via --input-hints flag)
+```
+
+**Example Usage:**
+```typescript
+// First-party game (JavaScript snippet)
+await runQA('https://game.com', {
+  inputHints: {
+    type: 'javascript',
+    content: `
+      gameBuilder.createAction('Jump')
+        .bindKey(' ')
+        .bindVirtualButton('#btn-jump');
+      gameBuilder.createAxis2D('Move')
+        .bindWASD()
+        .bindArrowKeys();
+    `
+  }
+});
+
+// Third-party game (semantic description)
+await runQA('https://2048game.com', {
+  inputHints: {
+    type: 'semantic',
+    content: 'Use arrow keys to move tiles in 4 directions'
+  }
+});
+```
+
+**Deliverable:** QA agent uses provided input hints to guide control detection and testing strategy
 
 ---
 

@@ -2,11 +2,14 @@
 
 ## Document Control
 - **Product Name:** DreamUp QA Agent
-- **Version:** 1.0
-- **Date:** November 3, 2025
+- **Version:** 1.1
+- **Date:** November 4, 2025
 - **Owner:** Matt Smith
 - **Status:** In Development
 - **Project Duration:** 3-5 days (core) + 2 days (stretch features)
+- **Change Log:**
+  - v1.1 (Nov 4): Added F1.3b Input Control Hints, updated API interfaces, added US-1.0
+  - v1.0 (Nov 3): Initial PRD from project specification
 
 ---
 
@@ -64,6 +67,46 @@ A fully automated QA pipeline that accepts any browser game URL, simulates reali
 
 ---
 
+## Game Engine Context (v1.3)
+
+### Scene Stack Architecture
+
+DreamUp's game engine uses a scene-based architecture with four types:
+- **Canvas2D & Canvas3D**: Full ECS runtimes with physics, rendering, and game logic
+- **UI scenes**: Pure DOM elements for menus and overlays
+- **Composite scenes**: Layer multiple child scenes together
+
+Games are represented as a stack of scenes with push/pop operations. A common pattern is a composite scene containing a 2D/3D game scene with a UI overlay for the HUD. UI scenes can suspend scenes beneath them (e.g., pause menus), while composite scenes manage suspension state and propagate lifecycle calls (mount, unmount, update, draw) to all children.
+
+### Input System Architecture
+
+The input system uses a two-layer architecture:
+
+**Low-level**: Hardware capture (keys, mouse, pointer)
+
+**High-level**: Gameplay abstractions
+- **Actions**: Map multiple inputs to named gameplay events (e.g., "Jump")
+  - Track states: pressed, down, released, hold duration
+  - Bind to keyboard keys, mouse buttons, or virtual buttons
+  - Example: `createAction('Jump').bindKey(' ').bindVirtualButton('#btn-jump')`
+
+- **Axes**: Provide continuous values for movement
+  - **1D Axes**: Return [-1, 1] with smoothing and opposite-direction cancellation
+  - **2D Axes**: Return vectors {x, y} with diagonal normalization
+  - Bind to WASD, arrow keys, virtual joysticks, D-pads
+  - Example: `createAxis2D('Move').bindWASD().bindArrowKeys()`
+
+Actions and axes decouple game logic from hardware—multiple input sources trigger the same action or axis, allowing keyboard, touch, and virtual controls to work interchangeably. Game code queries these abstractions through a scene's InputManager.
+
+### QA Agent Integration
+
+The game-building agent picks the input schema during game planning. For QA testing:
+- **First-party games**: Provide JavaScript snippet showing exact input schema
+- **Third-party games**: Provide semantic description (e.g., "arrow keys for movement")
+- The QA agent uses these hints to prioritize control schemes during testing
+
+---
+
 ## Functional Requirements
 
 ### Core Features (MVP - Days 1-5)
@@ -93,6 +136,16 @@ A fully automated QA pipeline that accepts any browser game URL, simulates reali
   - Executes contextually appropriate actions
   - Progresses through 2-3 screens/levels when possible
   - Avoids infinite loops with max action count limit
+
+**F1.3b Input Control Hints (NEW - v1.3)**
+- **Requirement:** Accept optional input control hints to guide interaction strategy
+- **Acceptance Criteria:**
+  - Accepts JavaScript snippet describing first-party game input schema (Actions/Axes pattern)
+  - Accepts semantic description for third-party games (e.g., "arrow keys for movement, spacebar to jump")
+  - Uses hints to prioritize specific control schemes during testing
+  - Falls back to auto-detection if provided hints fail or are incomplete
+  - Supports both discrete Actions (Jump, Shoot, Interact) and continuous Axes (MoveHorizontal, Move2D)
+  - Parses game engine input patterns: createAction(), createAxis(), bindKeys(), bindVirtualButton()
 
 **F1.4 Resilience & Error Handling**
 - **Requirement:** Handle failures gracefully without crashing
@@ -170,11 +223,21 @@ A fully automated QA pipeline that accepts any browser game URL, simulates reali
 - **Requirement:** Callable as module from Node.js environment
 - **Acceptance Criteria:**
   ```typescript
+  interface TestOptions {
+    timeout?: number;
+    retryCount?: number;
+    inputHints?: {
+      type: 'javascript' | 'semantic';
+      content: string;
+    };
+  }
+  
   const result = await runQA(gameUrl, options);
   // Returns: Promise<QAReport>
   ```
   - Async/await compatible
   - Configurable timeout and retry options
+  - Optional input hints for first-party or third-party games
   - Type-safe interfaces
 
 **F4.3 Output Schema**
@@ -277,6 +340,20 @@ A fully automated QA pipeline that accepts any browser game URL, simulates reali
 ## User Stories
 
 ### Epic 1: Core Browser Automation
+
+**US-1.0: Accept Input Hints** (NEW - v1.3)
+```
+As a game-building agent
+I want to provide input control hints to the QA agent
+So that testing focuses on the correct control scheme
+
+Acceptance Criteria:
+- Given I've generated a game with specific input controls
+- When I invoke the QA agent with JavaScript snippet or semantic hints
+- Then the agent prioritizes testing those specific controls
+- And falls back to auto-detection if hints are incomplete
+- And reports which controls were discovered via hints vs auto-detection
+```
 
 **US-1.1: Load Game**
 ```
@@ -818,8 +895,47 @@ dreamup-qa-agent/
 - [Vercel AI SDK](https://sdk.vercel.ai/docs)
 - [Test Games: itch.io HTML5](https://itch.io/games/html5)
 - [Test Games: Kongregate](https://www.kongregate.com/)
+- [DreamUp Sample Games](https://drive.google.com/file/d/1InNc6v5pWvRu-TXWlMA-XjEi2XBX8h63/view?usp=drive_link) (2 examples)
+
+### D: Input Schema Reference
+
+The DreamUp game engine uses a specific pattern for defining input controls. The QA agent should be able to parse this format when provided as a hint.
+
+**Example Input Schema** (from project overview v1.3):
+```javascript
+// Actions - discrete button events
+gameBuilder.createAction('Jump')
+  .bindKey(' ')
+  .bindKey('w')
+  .bindVirtualButton('#btn-jump');
+
+// Axes - horizontal movement (-1 to 1)
+gameBuilder.createAxis('MoveHorizontal')
+  .bindKeys('a', 'd')
+  .bindKeys('ArrowLeft', 'ArrowRight')
+  .bindButtons('#dpad .dpad-left', '#dpad .dpad-right')
+  .setSmoothing(0.15);
+
+// 2D Axes - combined directional input (normalized)
+gameBuilder.createAxis2D('Move')
+  .bindWASD()
+  .bindArrowKeys()
+  .bindJoystick('#joystick')
+  .setSmoothing(0.2);
+```
+
+Key methods to recognize:
+- `createAction(name)` - discrete button press
+- `createAxis(name)` - 1D continuous input
+- `createAxis2D(name)` - 2D vector input
+- `bindKey(key)` - keyboard binding
+- `bindKeys(negKey, posKey)` - axis with negative/positive keys
+- `bindVirtualButton(selector)` - DOM element button
+- `bindWASD()` / `bindArrowKeys()` - common presets
+- `setSmoothing(value)` - input smoothing factor
 
 ---
 
 **Document Version History**
+- v1.1 (Nov 4, 2025): Added Game Engine Context, Input Control Hints (F1.3b), updated API, added US-1.0, added Appendix D
 - v1.0 (Nov 3, 2025): Initial PRD created from project specification

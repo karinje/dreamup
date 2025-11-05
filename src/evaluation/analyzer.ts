@@ -9,7 +9,7 @@ import { getConfig } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
 import { EvaluationError } from '../utils/errors.js';
 import { screenshotToBase64 } from '../evidence/screenshots.js';
-import { LLMEvaluation, Screenshot, LogEntry } from '../types/index.js';
+import { LLMEvaluation, Screenshot, LogEntry, ControlScheme } from '../types/index.js';
 import {
   QA_SYSTEM_PROMPT,
   generatePlayabilityPrompt,
@@ -481,18 +481,48 @@ export async function getGameplayAction(
   gameUrl: string,
   currentScreenshot: Screenshot,
   actionHistory: string[],
-  currentPhase: string
+  currentPhase: string,
+  controlScheme?: ControlScheme | null,
+  modelName?: string,
+  recentScreenshots?: Screenshot[],
+  gameContext?: string
 ): Promise<{
-  action_type: string;
-  description: string;
+  keys_to_press: string[];
+  reasoning: string;
   confidence: number;
 }> {
-  logger.info('Getting LLM gameplay recommendation');
+  logger.info('Getting LLM gameplay recommendation', {
+    hasControlScheme: !!controlScheme,
+    source: controlScheme?.source,
+  });
 
   try {
-    const model = getLLMModel();
-    const prompt = generateGameplayActionPrompt(gameUrl, actionHistory, currentPhase);
-    const images = await prepareScreenshotsForLLM([currentScreenshot]);
+    // Use specified model or default to gpt-4o
+    const model = openai(modelName || 'gpt-4o');
+    
+    // Prepare temporal context if we have multiple frames
+    const hasTemporalContext = recentScreenshots && recentScreenshots.length > 1;
+    const prompt = generateGameplayActionPrompt(gameUrl, actionHistory, currentPhase, controlScheme, hasTemporalContext, gameContext);
+    
+    // Build image array with temporal labels
+    const content: any[] = [];
+    
+    if (hasTemporalContext) {
+      // Add temporal context explanation
+      const labels = ['T-2 (oldest)', 'T-1 (previous)', 'T (current)'];
+      const framesToSend = recentScreenshots!.slice(-3); // Last 3 frames max
+      
+      for (let i = 0; i < framesToSend.length; i++) {
+        const label = labels[labels.length - framesToSend.length + i];
+        content.push({ type: 'text', text: `\n=== FRAME ${label} ===` });
+        const frameImages = await prepareScreenshotsForLLM([framesToSend[i]]);
+        content.push(...frameImages);
+      }
+    } else {
+      // Single frame (first turn)
+      const images = await prepareScreenshotsForLLM([currentScreenshot]);
+      content.push(...images);
+    }
 
     const result = await generateText({
       model,
@@ -502,7 +532,7 @@ export async function getGameplayAction(
           role: 'user',
           content: [
             { type: 'text', text: prompt },
-            ...images,
+            ...content,
           ],
         },
       ],
@@ -510,21 +540,21 @@ export async function getGameplayAction(
 
     const parsed = parseLLMResponse<{
       game_type: string;
-      recommended_controls: string[];
-      next_action: string;
-      action_description: string;
+      game_state: string;
+      keys_to_press: string[];
+      reasoning: string;
       confidence: number;
     }>(result.text);
 
     logger.info('LLM gameplay recommendation', {
-      action: parsed.next_action,
-      description: parsed.action_description,
+      keys: parsed.keys_to_press,
+      reasoning: parsed.reasoning,
       confidence: parsed.confidence,
     });
 
     return {
-      action_type: parsed.next_action,
-      description: parsed.action_description,
+      keys_to_press: parsed.keys_to_press || [],
+      reasoning: parsed.reasoning,
       confidence: parsed.confidence,
     };
   } catch (error) {
@@ -533,10 +563,10 @@ export async function getGameplayAction(
       error: err.message,
     });
     
-    // Fallback to keyboard controls
+    // Fallback to exploring with arrow keys
     return {
-      action_type: 'keyboard_arrows',
-      description: 'Fallback to arrow key controls',
+      keys_to_press: ['ArrowUp', 'ArrowRight'],
+      reasoning: 'Fallback: exploring with arrow keys',
       confidence: 0.3,
     };
   }

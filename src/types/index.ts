@@ -91,6 +91,14 @@ export interface TestMetadata {
   viewport: Viewport;
   llm_provider: string;
   llm_model: string;
+  test_config?: {
+    pause_interval?: number;
+    game_speed?: number;
+    timeout_ms?: number;
+    has_game_context?: boolean;
+    has_input_hints?: boolean;
+    quick_test?: boolean;
+  };
 }
 
 /**
@@ -121,6 +129,7 @@ export interface TestConfig {
   verbose?: boolean;
   enableGifRecording?: boolean;
   gifMaxDuration?: number;
+  inputHints?: InputHints;
 }
 
 /**
@@ -205,6 +214,32 @@ export interface AgentConfig {
 }
 
 /**
+ * Input control hints for guiding QA testing
+ */
+export interface InputHints {
+  type: 'javascript' | 'semantic';
+  content: string;
+}
+
+/**
+ * Parsed control scheme from input hints
+ */
+export interface ControlScheme {
+  actions: Array<{
+    name: string;
+    keys: string[];
+    buttons?: string[];
+  }>;
+  axes: Array<{
+    name: string;
+    type: '1d' | '2d';
+    keys: string[];
+    bindings?: string[];
+  }>;
+  source: 'hints' | 'auto-detected';
+}
+
+/**
  * Options for the programmatic API
  */
 export interface QAOptions {
@@ -213,6 +248,12 @@ export interface QAOptions {
   screenshotCount?: number;
   verbose?: boolean;
   outputDir?: string;
+  inputHints?: InputHints;
+  model?: string;
+  pauseInterval?: number; // Pause game every X seconds (pause-step mode)
+  gameSpeed?: number; // Game speed percentage (for ?speed=X or ?testMode=true)
+  gameContext?: string; // Game-specific context/instructions for the AI
+  quickTest?: boolean; // Fast functional test mode - press all keys without LLM
 }
 
 /**

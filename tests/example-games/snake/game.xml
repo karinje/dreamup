@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<game aspectRatio="16:9" name="Snake Game">
+  <template name="SnakeSegment">
+    <param name="x" type="number"/>
+    <param name="y" type="number"/>
+    <param name="index" type="number"/>
+    <entity>
+      <component type="Transform" x="{x}" y="{y}"/>
+      <component type="Rect" width="0.9" height="0.9" color="#c0392b"/>
+      <component type="SnakeBody" index="{index}"/>
+    </entity>
+  </template>
+
+  <scene name="MainMenu" type="ui" firstScene="true" backgroundColor="#1a1a2e">
+    <html>
+      <![CDATA[
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:20px;color:#fff;font-family:'Courier New',monospace;">
+          <h1 style="font-size:48px;margin:0;">SNAKE</h1>
+          <p style="opacity:0.8;">Use Arrow Keys, WASD, or D-pad to move</p>
+          <button id="start-btn">Start Game</button>
+        </div>
+      ]]>
+    </html>
+    <script>
+      <![CDATA[
+        const $ = (sel) => root.querySelector(sel)
+        $('#start-btn')?.addEventListener('click', () => {
+          GlobalState.set({ score: 0 })
+          sceneManager.pushScene('Gameplay')
+        })
+      ]]>
+    </script>
+  </scene>
+
+  <scene name="Gameplay" type="composite">
+    <scene type="2d" name="GameWorld" backgroundColor="#0f3460">
+      <entity name="Camera">
+        <component type="Transform" x="10" y="10"/>
+        <component type="Camera"/>
+      </entity>
+
+      <!-- Walls -->
+      <entity name="WallTop">
+        <component type="Transform" x="10" y="19.75"/>
+        <component type="Rect" width="20" height="0.5" color="#16c79a"/>
+      </entity>
+      <entity name="WallBottom">
+        <component type="Transform" x="10" y="0.25"/>
+        <component type="Rect" width="20" height="0.5" color="#16c79a"/>
+      </entity>
+      <entity name="WallLeft">
+        <component type="Transform" x="0.25" y="10"/>
+        <component type="Rect" width="0.5" height="20" color="#16c79a"/>
+      </entity>
+      <entity name="WallRight">
+        <component type="Transform" x="19.75" y="10"/>
+        <component type="Rect" width="0.5" height="20" color="#16c79a"/>
+      </entity>
+
+      <!-- Snake Head (no component needed, just Transform) -->
+      <entity name="SnakeHead">
+        <component type="Transform" x="10" y="10"/>
+        <component type="Rect" width="0.9" height="0.9" color="#e74c3c"/>
+      </entity>
+
+      <!-- Food -->
+      <entity name="Food">
+        <component type="Transform" x="15" y="15"/>
+        <component type="Food" x="15" y="15"/>
+        <component type="Rect" width="0.8" height="0.8" color="#f39c12"/>
+      </entity>
+    </scene>
+
+    <scene name="HUD" type="ui" backgroundColor="transparent" suspendBehind="false">
+      <html>
+        <![CDATA[
+          <div style="position:absolute;top:20px;left:20px;color:#fff;font-family:'Courier New',monospace;">
+            <div style="font-size:24px;">Score: <span id="score">0</span></div>
+          </div>
+          
+          <nav id="dpad" class="dpad" aria-label="Virtual D-pad" style="position:absolute;bottom:40px;right:40px;">
+            <button class="dpad-up" data-icon="ArrowUp"></button>
+            <button class="dpad-down" data-icon="ArrowDown"></button>
+            <button class="dpad-left" data-icon="ArrowLeft"></button>
+            <button class="dpad-right" data-icon="ArrowRight"></button>
+          </nav>
+        ]]>
+      </html>
+      <script>
+        <![CDATA[
+          const $ = (sel) => root.querySelector(sel)
+          const unwatchScore = GlobalState.watch('score', (score) => {
+            $('#score').textContent = score
+          })
+          return () => unwatchScore()
+        ]]>
+      </script>
+    </scene>
+  </scene>
+
+  <scene name="PauseMenu" type="ui" backgroundColor="rgba(0,0,0,0.8)" suspendBehind="true">
+    <html>
+      <![CDATA[
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;color:#fff;font-family:'Courier New',monospace;">
+          <h2 style="font-size:36px;margin:0;">PAUSED</h2>
+          <button id="resume-btn">Resume</button>
+          <button id="menu-btn">Exit to Menu</button>
+        </div>
+      ]]>
+    </html>
+    <script>
+      <![CDATA[
+        const $ = (sel) => root.querySelector(sel)
+        $('#resume-btn')?.addEventListener('click', () => sceneManager.popScene())
+        $('#menu-btn')?.addEventListener('click', () => {
+          sceneManager.popScene()
+          sceneManager.popScene()
+        })
+      ]]>
+    </script>
+  </scene>
+
+  <scene name="GameOver" type="ui" backgroundColor="rgba(0,0,0,0.9)" suspendBehind="true">
+    <html>
+      <![CDATA[
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:20px;color:#fff;font-family:'Courier New',monospace;">
+          <h2 style="font-size:48px;margin:0;color:#e74c3c;">GAME OVER</h2>
+          <div style="font-size:24px;">Score: <span id="final-score">0</span></div>
+          <div style="display:flex;gap:16px;margin-top:12px;">
+            <button id="restart-btn">Play Again</button>
+            <button id="menu-btn-go">Main Menu</button>
+          </div>
+        </div>
+      ]]>
+    </html>
+    <script>
+      <![CDATA[
+        const $ = (sel) => root.querySelector(sel)
+        const score = GlobalState.get('score') ?? 0
+        $('#final-score').textContent = score
+        
+        $('#restart-btn')?.addEventListener('click', () => {
+          EventBus.emit('game:restart')
+          sceneManager.popScene()
+        })
+        $('#menu-btn-go')?.addEventListener('click', () => {
+          sceneManager.popScene()
+          sceneManager.popScene()
+        })
+      ]]>
+    </script>
+  </scene>
+
+  <style>
+    <![CDATA[
+      button {
+        appearance: none;
+        -webkit-appearance: none;
+        background: #16c79a;
+        color: #fff;
+        border: 2px solid #11977a;
+        padding: 12px 24px;
+        border-radius: 8px;
+        font-family: 'Courier New', monospace;
+        font-size: 16px;
+        font-weight: bold;
+        letter-spacing: 1px;
+        box-shadow: 0 4px 0 #0d7a5f, 0 6px 12px rgba(0,0,0,0.3);
+        transition: all .1s ease;
+        cursor: pointer;
+        text-transform: uppercase;
+      }
+      button:hover {
+        background: #19e6b3;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 0 #0d7a5f, 0 8px 16px rgba(0,0,0,0.4);
+      }
+      button:active {
+        background: #11977a;
+        transform: translateY(2px);
+        box-shadow: 0 2px 0 #0d7a5f, 0 3px 8px rgba(0,0,0,0.3);
+      }
+      button:focus-visible {
+        outline: 3px solid #16c79a;
+        outline-offset: 4px;
+      }
+    ]]>
+  </style>
+</game>

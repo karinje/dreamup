@@ -335,6 +335,62 @@
             color: #e2e8f0;
         }
 
+        /* Test Config Section */
+        .config-section {
+            background: rgba(102, 126, 234, 0.08);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 10px;
+            padding: 16px;
+            margin: 15px 0;
+        }
+
+        .config-title {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .config-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .config-badge {
+            background: rgba(102, 126, 234, 0.15);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            padding: 8px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #cbd5e1;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .config-badge:hover {
+            background: rgba(102, 126, 234, 0.25);
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .config-badge-label {
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .config-badge-value {
+            color: #e2e8f0;
+            font-weight: 600;
+        }
+
         /* Collapsible Sections */
         .collapsible-section {
             margin: 15px 0;
@@ -778,6 +834,53 @@
                                     <div class="meta-value" style="font-size: 12px;">${report.metadata.llm_model}</div>
                                 </div>
                             </div>
+
+                            ${report.metadata.test_config ? `
+                                <div class="config-section">
+                                    <div class="config-title">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: currentColor; fill: none;">
+                                            <circle cx="12" cy="12" r="3"/>
+                                            <path d="M12 1v6m0 6v6m5.2-13a6 6 0 0 1 4.8 4.8m-18 0A6 6 0 0 1 6.8 5.2M18 18a6 6 0 0 1-4.8 4.8m0-18A6 6 0 0 0 4.2 6"/>
+                                        </svg>
+                                        Test Configuration
+                                    </div>
+                                    <div class="config-badges">
+                                        ${report.metadata.test_config.pause_interval ? `
+                                            <div class="config-badge">
+                                                <span class="config-badge-label">Pause:</span>
+                                                <span class="config-badge-value">${report.metadata.test_config.pause_interval}s</span>
+                                            </div>
+                                        ` : ''}
+                                        ${report.metadata.test_config.game_speed ? `
+                                            <div class="config-badge">
+                                                <span class="config-badge-label">Speed:</span>
+                                                <span class="config-badge-value">${report.metadata.test_config.game_speed}%</span>
+                                            </div>
+                                        ` : ''}
+                                        ${report.metadata.test_config.timeout_ms ? `
+                                            <div class="config-badge">
+                                                <span class="config-badge-label">Timeout:</span>
+                                                <span class="config-badge-value">${(report.metadata.test_config.timeout_ms / 60000).toFixed(1)} min</span>
+                                            </div>
+                                        ` : ''}
+                                        ${report.metadata.test_config.has_input_hints ? `
+                                            <div class="config-badge">
+                                                <span class="config-badge-value">✓ Input Hints</span>
+                                            </div>
+                                        ` : ''}
+                                        ${report.metadata.test_config.has_game_context ? `
+                                            <div class="config-badge">
+                                                <span class="config-badge-value">✓ Game Context</span>
+                                            </div>
+                                        ` : ''}
+                                        ${report.metadata.test_config.quick_test ? `
+                                            <div class="config-badge">
+                                                <span class="config-badge-value">⚡ Quick Test</span>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            ` : ''}
 
                             ${report.issues.length > 0 ? `
                                 <div class="collapsible-section" id="issues-${idx}">

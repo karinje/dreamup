@@ -76,6 +76,37 @@ const report = await runQA('https://your-game-url.com', {
 console.log(report);
 ```
 
+#### Using Input Control Hints (NEW)
+
+Provide hints about game controls to guide testing:
+
+```typescript
+// Semantic hints (third-party games)
+const report = await runQA('https://2048game.com', {
+  inputHints: {
+    type: 'semantic',
+    content: 'Use arrow keys to move tiles in 4 directions',
+  },
+});
+
+// JavaScript hints (DreamUp-generated games)
+const report = await runQA('https://my-game.com', {
+  inputHints: {
+    type: 'javascript',
+    content: `
+      gameBuilder.createAction('Jump').bindKey(' ');
+      gameBuilder.createAxis2D('Move').bindWASD().bindArrowKeys();
+    `,
+  },
+});
+```
+
+CLI usage:
+```bash
+qa-agent https://2048game.com --hints "Use arrow keys to move tiles"
+qa-agent https://game.com --hints "createAction('Jump').bindKey(' ')" --hints-type javascript
+```
+
 #### Lambda Integration
 
 ```typescript
@@ -120,6 +151,28 @@ export const handler = async (event) => {
 ## Architecture
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed system design.
+
+## Testing
+
+**📖 Full Testing Guide:** See [tests/TEST_GUIDE.md](tests/TEST_GUIDE.md) for:
+- Setup instructions (npm link, ngrok)
+- Testing with public games (2048, etc.)
+- Testing local DreamUp games (Pong, Snake)
+- Input hints usage & examples
+- Automated test suite
+
+**Quick test:**
+```bash
+# Build and link CLI
+npm run build
+npm link
+
+# Test a public game
+qa-agent https://gabrielecirulli.github.io/2048/ --hints "Use arrow keys to move tiles"
+
+# Run automated test suite
+./tests/run-tests.sh
+```
 
 ## Development
 

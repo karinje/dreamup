@@ -2,7 +2,7 @@
  * Game navigation and state management
  */
 
-import { GameState, GamePhase, ActionResult, Screenshot } from '../types/index.js';
+import { GameState, GamePhase, ActionResult, Screenshot, ControlScheme } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { NavigationError } from '../utils/errors.js';
 import { getConfig } from '../utils/config.js';
@@ -11,10 +11,10 @@ import {
   simulateGameplayInput,
   clickCenter,
   wait,
-  executeRecommendedAction,
+  pressKey,
 } from './interactions.js';
 import { captureScreenshot } from '../evidence/screenshots.js';
-import { isPageResponsive } from './browser.js';
+import { isPageResponsive, evaluateInPage } from './browser.js';
 
 /**
  * Initialize game state
@@ -38,7 +38,12 @@ export function createGameState(): GameState {
 export async function navigateGame(
   sessionDir: string,
   state: GameState,
-  gameUrl: string
+  gameUrl: string,
+  controlScheme: ControlScheme | null = null,
+  model?: string,
+  pauseInterval?: number,
+  gameContext?: string,
+  quickTest?: boolean
 ): Promise<GameState> {
   const config = getConfig();
   logger.info('Starting autonomous game navigation');
@@ -130,9 +135,12 @@ export async function navigateGame(
 
     // Phase 4: Gameplay
     state.phase = 'gameplay';
-    logger.info('Entering gameplay phase');
+    logger.info('Entering gameplay phase', {
+      hasControlScheme: !!controlScheme,
+      source: controlScheme?.source,
+    });
 
-    await conductGameplaySession(sessionDir, state, config.maxActionCount, gameUrl);
+    await conductGameplaySession(sessionDir, state, config.maxActionCount, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest);
 
     // Phase 5: Check final state
     const isGameOver = await detectGameOver();
@@ -171,12 +179,39 @@ async function conductGameplaySession(
   sessionDir: string,
   state: GameState,
   maxActions: number,
-  gameUrl: string
+  gameUrl: string,
+  controlScheme: ControlScheme | null = null,
+  model?: string,
+  pauseInterval?: number,
+  gameContext?: string,
+  quickTest?: boolean
 ): Promise<void> {
-  logger.info('Starting LLM-driven gameplay session', { maxActions });
+  logger.info(quickTest ? 'Starting quick test gameplay session' : 'Starting LLM-driven gameplay session', { 
+    maxActions, 
+    pauseMode: !!pauseInterval,
+    quickTest: !!quickTest 
+  });
   
-  // Import here to avoid circular dependency
-  const { getGameplayAction } = await import('../evaluation/analyzer.js');
+  // Import here to avoid circular dependency (only needed for LLM mode)
+  const { getGameplayAction } = quickTest ? { getGameplayAction: null as any } : await import('../evaluation/analyzer.js');
+
+  // If pause mode enabled, ensure game starts paused
+  if (pauseInterval) {
+    try {
+      await evaluateInPage(() => {
+        if (typeof (window as any).gamePause === 'function') {
+          (window as any).gamePause();
+        }
+      });
+      await wait(100); // Let pause take effect
+      logger.info('Game paused at start of gameplay session');
+    } catch (error) {
+      logger.warn('Could not pause game at start (game may already be paused)');
+    }
+  }
+
+  // Store recent screenshots for temporal context (last 3 frames)
+  const recentScreenshots: Screenshot[] = [];
 
   for (let i = 0; i < maxActions && state.actionCount < maxActions; i++) {
     try {
@@ -195,43 +230,117 @@ async function conductGameplaySession(
         break;
       }
 
-      // Capture screenshot for LLM analysis (every 3 iterations or if we have none)
-      let currentScreenshot = state.screenshots[state.screenshots.length - 1];
-      if (!currentScreenshot || i % 3 === 0) {
-        currentScreenshot = await captureScreenshot(
-          sessionDir,
-          `gameplay_${i}`,
-          'gameplay'
-        );
-        state.screenshots.push(currentScreenshot);
+      // STEP 1: Game is already paused (from previous cycle or start)
+      // STEP 2: Capture screenshot while game is paused
+      const currentScreenshot = await captureScreenshot(
+        sessionDir,
+        `gameplay_${i}`,
+        'gameplay'
+      );
+      state.screenshots.push(currentScreenshot);
+
+      // Add to recent screenshots for temporal context
+      recentScreenshots.push(currentScreenshot);
+      if (recentScreenshots.length > 3) {
+        recentScreenshots.shift(); // Keep only last 3 frames
       }
 
-      // Get LLM recommendation for next action
-      const recommendation = await getGameplayAction(
-        gameUrl,
-        currentScreenshot,
-        state.actionHistory,
-        state.phase
-      );
+      // STEP 3: Get action (LLM or random based on quickTest mode)
+      let keysToPress: string[];
+      let reasoning: string;
 
-      logger.info('LLM recommended action', {
-        action: recommendation.action_type,
-        description: recommendation.description,
-        confidence: recommendation.confidence,
-      });
+      if (quickTest) {
+        // Quick test mode: pick random key from control scheme
+        let availableKeys: string[] = [];
+        if (controlScheme) {
+          for (const action of controlScheme.actions) {
+            availableKeys.push(...action.keys);
+          }
+          for (const axis of controlScheme.axes) {
+            availableKeys.push(...axis.keys);
+          }
+          availableKeys = Array.from(new Set(availableKeys));
+        } else {
+          // Default keys
+          availableKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', ' '];
+        }
+        
+        const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+        keysToPress = [randomKey];
+        reasoning = `Quick test: randomly pressed ${randomKey}`;
+        
+        logger.info('Quick test random key', { key: randomKey });
+      } else {
+        // Normal mode: LLM-driven
+        const recommendation = await getGameplayAction(
+          gameUrl,
+          currentScreenshot,
+          state.actionHistory,
+          state.phase,
+          controlScheme,
+          model,
+          recentScreenshots, // Pass last 3 frames for direction understanding
+          gameContext // Game-specific AI instructions
+        );
 
-      // Execute the recommended action
-      await executeRecommendedAction(recommendation.action_type, 3000);
+        keysToPress = recommendation.keys_to_press;
+        reasoning = recommendation.reasoning;
+
+        logger.info('LLM recommended action', {
+          keys: keysToPress,
+          reasoning: reasoning,
+          confidence: recommendation.confidence,
+        });
+      }
+
+      if (pauseInterval) {
+        // STEP 4: Resume game
+        try {
+          await evaluateInPage(() => {
+            if (typeof (window as any).gameResume === 'function') {
+              (window as any).gameResume();
+            }
+          });
+          logger.info('Game resumed for action execution');
+        } catch (error) {
+          logger.warn('Game resume function not available (this is fine for non-DreamUp games)');
+        }
+
+        // STEP 5: Press key IMMEDIATELY after resume (within ~10ms)
+        for (const key of keysToPress) {
+          await pressKey(key, 50); // Quick press, 50ms duration
+          await wait(10); // Minimal delay between keys
+        }
+
+        // STEP 6: Wait for exactly one pause interval (game is running)
+        await wait(pauseInterval * 1000);
+
+        // STEP 7: Pause game for next cycle
+        try {
+          await evaluateInPage(() => {
+            if (typeof (window as any).gamePause === 'function') {
+              (window as any).gamePause();
+            }
+          });
+          logger.info('Game paused after cycle');
+        } catch (error) {
+          logger.warn('Game pause function not available');
+        }
+      } else {
+        // Normal mode: just press keys and wait
+        for (const key of keysToPress) {
+          await pressKey(key, 100);
+          await wait(quickTest ? 500 : 300); // 500ms for quick test, 300ms for normal
+        }
+        await wait(quickTest ? 0 : 1000); // Skip wait for quick test
+      }
       
       state.actionHistory.push(
-        `LLM action: ${recommendation.action_type} - ${recommendation.description}`
+        quickTest ? `Quick test: [${keysToPress.join(', ')}]` : `LLM keys: [${keysToPress.join(', ')}] - ${reasoning}`
       );
-      state.actionCount += 5;
+      state.actionCount += keysToPress.length;
 
       state.lastActionTime = Date.now();
-
-      // Small delay between action sequences
-      await wait(1000);
 
       // Check if we're stuck (same state for too long)
       if (await isStuck(state)) {
@@ -246,7 +355,7 @@ async function conductGameplaySession(
       
       // Fallback to simple keyboard controls
       try {
-        await simulateGameplayInput(3000);
+        await simulateGameplayInput(3000, controlScheme);
         state.actionHistory.push('Fallback: keyboard input');
         state.actionCount += 3;
       } catch (fallbackError) {
@@ -291,8 +400,8 @@ async function attemptUnstick(state: GameState): Promise<void> {
     await clickCenter();
     await wait(500);
 
-    // Try some keyboard input
-    await simulateGameplayInput(1000);
+    // Try some keyboard input (pass null since we're in unstick mode)
+    await simulateGameplayInput(1000, null);
 
     state.actionHistory.push('Attempted unstick maneuver');
   } catch (error) {
