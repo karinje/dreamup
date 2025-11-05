@@ -9,9 +9,12 @@ DreamUp QA Agent autonomously tests browser games by simulating user interaction
 ## Features
 
 - 🤖 **Autonomous Testing**: Automatically detects UI patterns, simulates gameplay, and navigates through game screens
-- 📸 **Evidence Capture**: Takes timestamped screenshots and collects console logs
+- 🎮 **Input Control Hints**: Accept control hints from game builders (JavaScript or semantic descriptions)
+- ⚡ **Quick Test Mode**: Fast functional verification of input controls without LLM overhead
+- 🎯 **LLM-Driven Testing**: Strategic gameplay with temporal context and pause-step synchronization
+- 📸 **Evidence Capture**: Timestamped screenshots, animated GIFs, and console logs
 - 🧠 **AI Evaluation**: Uses LLMs to assess playability, control responsiveness, and stability
-- 📊 **Structured Reports**: Generates JSON reports with scores, issues, and confidence metrics
+- 📊 **Visual Dashboard**: Interactive web UI for viewing test reports and gameplay recordings
 - 🚀 **Multiple Interfaces**: CLI, programmatic API, and Lambda-ready
 
 ## Quick Start
@@ -54,58 +57,81 @@ LLM_MODEL=gpt-4o
 #### CLI
 
 ```bash
-# Run a test
-npm run dev -- https://your-game-url.com
+# Build and link
+npm run build && npm link
 
-# After building
-npm run build
+# Basic test
 qa-agent https://your-game-url.com
+
+# Quick test mode (fast input verification)
+qa-agent https://your-game-url.com --quick-test
+
+# LLM-driven with pause-step mode
+qa-agent https://your-game-url.com --pause 0.5 --model gpt-4o --timeout 180000
+
+# With input hints
+qa-agent https://your-game-url.com \
+  --hints "Use arrow keys to move" \
+  --hints-type semantic
+
+# With game-specific strategy
+qa-agent https://your-game-url.com \
+  --context "You control the right paddle. React early to ball movement." \
+  --pause 0.25
 ```
+
+**See [DEMO.md](DEMO.md) for complete demo walkthrough.**
 
 #### Programmatic API
 
 ```typescript
 import { runQA } from 'dreamup-qa-agent';
 
+// Basic test
 const report = await runQA('https://your-game-url.com', {
-  maxExecutionTime: 300000, // 5 minutes
-  screenshotCount: 5,
+  maxExecutionTime: 300000,
   verbose: true,
 });
 
-console.log(report);
-```
-
-#### Using Input Control Hints (NEW)
-
-Provide hints about game controls to guide testing:
-
-```typescript
-// Semantic hints (third-party games)
-const report = await runQA('https://2048game.com', {
+// Quick test mode
+const report = await runQA('https://your-game-url.com', {
+  quickTest: true,
   inputHints: {
     type: 'semantic',
-    content: 'Use arrow keys to move tiles in 4 directions',
+    content: 'Use arrow keys to move',
   },
 });
 
-// JavaScript hints (DreamUp-generated games)
-const report = await runQA('https://my-game.com', {
+// Full LLM-driven test
+const report = await runQA('https://your-game-url.com', {
+  model: 'gpt-4o',
+  pauseInterval: 0.5,
+  gameContext: 'You control the right paddle. React early.',
   inputHints: {
     type: 'javascript',
-    content: `
-      gameBuilder.createAction('Jump').bindKey(' ');
-      gameBuilder.createAxis2D('Move').bindWASD().bindArrowKeys();
-    `,
+    content: 'gameBuilder.createAxis("Move").bindArrowKeys()',
   },
 });
 ```
 
-CLI usage:
+#### Dashboard Viewer
+
+View test reports in a visual dashboard:
+
 ```bash
-qa-agent https://2048game.com --hints "Use arrow keys to move tiles"
-qa-agent https://game.com --hints "createAction('Jump').bindKey(' ')" --hints-type javascript
+# Start the viewer
+cd viewer && npm run dev
+
+# Open http://localhost:5173
+# Test reports auto-appear in the dashboard
 ```
+
+The dashboard shows:
+- 🎬 Animated GIFs of gameplay
+- 📸 Screenshot timeline with temporal context
+- 🏷️ Test configuration badges (model, pause, speed, timeout)
+- 📊 Playability scores and LLM evaluations
+- 🐛 Issues with severity levels
 
 #### Lambda Integration
 
@@ -137,13 +163,23 @@ export const handler = async (event) => {
     }
   ],
   screenshots: ['path/to/screenshot1.png', ...],
+  gif_path: 'path/to/gameplay.gif',
   logs: ['path/to/logs.json'],
   metadata: {
     game_url: string,
     timestamp: string,
     duration_ms: number,
     browser: string,
-    viewport: { width: number, height: number }
+    viewport: { width: number, height: number },
+    llm_model: string,
+    test_config: {
+      pause_interval?: number,
+      game_speed?: number,
+      timeout_ms?: number,
+      has_input_hints?: boolean,
+      has_game_context?: boolean,
+      quick_test?: boolean
+    }
   }
 }
 ```
@@ -200,12 +236,36 @@ The agent has been validated against:
 4. Broken games (error detection)
 5. Complex multi-screen games (navigation)
 
+## Test Modes
+
+### Quick Test Mode
+Fast functional verification by pressing all control keys randomly without LLM involvement. Perfect for:
+- Smoke testing input bindings
+- Validating controls work
+- Rapid iteration during development
+
+### LLM-Driven Mode
+Strategic gameplay with AI decision-making. Features:
+- **Temporal context**: Sends last 3 frames to understand direction/velocity
+- **Pause-step mode**: Synchronizes LLM decisions with game progression
+- **Game context**: Inject specific strategy instructions
+- **Adaptive timeouts**: Graceful exits with partial data capture
+
 ## Limitations
 
+- Best results with DreamUp games (pause control support)
+- LLM latency requires pause mode for fast-paced games
 - No multiplayer or network-dependent games
 - No mobile browser emulation
-- No security/performance testing
-- 5-minute max execution time per game
+- Configurable max execution time (default: 5 minutes)
+
+## Documentation
+
+- 📖 **[DEMO.md](DEMO.md)** - Complete demo walkthrough with examples
+- 📚 **[tests/TEST_GUIDE.md](tests/TEST_GUIDE.md)** - Detailed testing guide
+- 🏗️ **[docs/dreamup_prd.md](docs/dreamup_prd.md)** - Product requirements
+- 📋 **[docs/dreamup_tasks.md](docs/dreamup_tasks.md)** - Implementation roadmap
+- 🎮 **[examples/input-hints-example.ts](examples/input-hints-example.ts)** - Input hints examples
 
 ## Contributing
 
