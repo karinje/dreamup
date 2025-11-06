@@ -47,6 +47,8 @@ node dist/cli.js <game-url> [options]
   - Example: `"Snake game: Use arrow keys to control the snake. Move towards the orange food to grow."`
 
 #### Execution Modes
+**Default Behavior:** If no flags are provided for `--speed`, `--pause`, or `--quick-test`, the game will run in **regular LLM mode** by default. In this mode, the LLM makes continuous decisions without pausing the game, and the game runs at normal speed.
+
 - `--pause <seconds>` - Pause-step mode: pause game every X seconds for LLM decision
   - Examples: `0.5` (pause every 500ms), `1.0` (every 1s), `0.35` (every 350ms)
   - Only works with DreamUp games (games that support pause mode)
@@ -105,6 +107,23 @@ node dist/cli.js \
 - Provides game context explaining paddle control and objectives
 - **Includes input hints** to restrict LLM to only use `ArrowUp` and `ArrowDown` keys
 - The evaluation will only give full controls score if both hint keys are tested
+
+### Example 3: 2048 Game in Regular LLM Mode
+
+```bash
+node dist/cli.js \
+  --url "https://gabrielecirulli.github.io/2048/" \
+  --hints "Use arrow keys to move tiles" \
+  --timeout 300000
+```
+
+**What this does:**
+- Tests the 2048 game in **regular LLM mode** (no pause, no speed adjustment)
+- LLM makes continuous decisions without pausing the game
+- Game runs at normal speed
+- Uses input hints to restrict LLM to arrow keys only
+- Runs for 5 minutes (default timeout) before timeout
+- No pause mode flag = regular LLM mode with continuous gameplay
 
 ## Understanding the Results
 
