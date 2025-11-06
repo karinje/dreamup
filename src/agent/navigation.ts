@@ -16,11 +16,21 @@ import {
 import { captureScreenshot } from '../evidence/screenshots.js';
 import { isPageResponsive, evaluateInPage } from './browser.js';
 
+// Store current gameState for timeout handler access
+let currentGameState: GameState | null = null;
+
+/**
+ * Get current game state (for timeout handler)
+ */
+export function getCurrentGameState(): GameState | null {
+  return currentGameState;
+}
+
 /**
  * Initialize game state
  */
 export function createGameState(): GameState {
-  return {
+  const state: GameState = {
     phase: 'loading',
     actionCount: 0,
     startTime: Date.now(),
@@ -30,6 +40,8 @@ export function createGameState(): GameState {
     errors: [],
     actionHistory: [],
   };
+  currentGameState = state;  // Store for timeout access
+  return state;
 }
 
 /**
@@ -43,8 +55,10 @@ export async function navigateGame(
   model?: string,
   pauseInterval?: number,
   gameContext?: string,
-  quickTest?: boolean
+  quickTest?: boolean,
+  reasoningEffort?: 'low' | 'medium' | 'high'
 ): Promise<GameState> {
+  currentGameState = state;  // Keep reference updated
   const config = getConfig();
   logger.info('Starting autonomous game navigation');
 
@@ -140,7 +154,7 @@ export async function navigateGame(
       source: controlScheme?.source,
     });
 
-    await conductGameplaySession(sessionDir, state, config.maxActionCount, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest);
+    await conductGameplaySession(sessionDir, state, config.maxActionCount, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest, reasoningEffort);
 
     // Phase 5: Check final state
     const isGameOver = await detectGameOver();
@@ -184,7 +198,8 @@ async function conductGameplaySession(
   model?: string,
   pauseInterval?: number,
   gameContext?: string,
-  quickTest?: boolean
+  quickTest?: boolean,
+  reasoningEffort?: 'low' | 'medium' | 'high'
 ): Promise<void> {
   logger.info(quickTest ? 'Starting quick test gameplay session' : 'Starting LLM-driven gameplay session', { 
     maxActions, 
@@ -237,7 +252,6 @@ async function conductGameplaySession(
         `gameplay_${i}`,
         'gameplay'
       );
-      state.screenshots.push(currentScreenshot);
 
       // Add to recent screenshots for temporal context
       recentScreenshots.push(currentScreenshot);
@@ -245,7 +259,7 @@ async function conductGameplaySession(
         recentScreenshots.shift(); // Keep only last 3 frames
       }
 
-      // STEP 3: Get action (LLM or random based on quickTest mode)
+      // STEP 3: Get action (LLM or random based on quickTest mode) for THIS screenshot
       let keysToPress: string[];
       let reasoning: string;
 
@@ -272,6 +286,25 @@ async function conductGameplaySession(
         logger.info('Quick test random key', { key: randomKey });
       } else {
         // Normal mode: LLM-driven
+        // Store temporal context info BEFORE calling LLM (for debugging)
+        // recentScreenshots already includes currentScreenshot (pushed at line 255)
+        // Analyzer uses recentScreenshots.slice(-3), so we match that logic
+        if (recentScreenshots && recentScreenshots.length > 1) {
+          const framesToSend = recentScreenshots.slice(-3); // Last 3 frames (matches analyzer logic)
+          // framesToSend[framesToSend.length - 1] should be currentScreenshot
+          currentScreenshot.temporal_context = {
+            t_current: currentScreenshot.path,
+          };
+          if (framesToSend.length >= 2) {
+            // T-1 is the second-to-last frame
+            currentScreenshot.temporal_context.t_minus_1 = framesToSend[framesToSend.length - 2].path;
+          }
+          if (framesToSend.length >= 3) {
+            // T-2 is the third-to-last frame
+            currentScreenshot.temporal_context.t_minus_2 = framesToSend[framesToSend.length - 3].path;
+          }
+        }
+        
         const recommendation = await getGameplayAction(
           gameUrl,
           currentScreenshot,
@@ -280,7 +313,8 @@ async function conductGameplaySession(
           controlScheme,
           model,
           recentScreenshots, // Pass last 3 frames for direction understanding
-          gameContext // Game-specific AI instructions
+          gameContext, // Game-specific AI instructions
+          reasoningEffort // Reasoning effort for gpt-5/o1 models
         );
 
         keysToPress = recommendation.keys_to_press;
@@ -292,6 +326,15 @@ async function conductGameplaySession(
           confidence: recommendation.confidence,
         });
       }
+
+      // Store the action and reasoning on THIS screenshot immediately after getting it from LLM
+      // This screenshot shows the game state, and the LLM decided on this action based on this screenshot
+      currentScreenshot.llm_action = keysToPress.join(', ');
+      currentScreenshot.llm_reasoning = reasoning;
+
+      // Add screenshot to state IMMEDIATELY after storing LLM metadata (before pressing keys)
+      // This ensures if an error occurs during key press, the screenshot with metadata is still captured
+      state.screenshots.push(currentScreenshot);
 
       if (pauseInterval) {
         // STEP 4: Resume game
@@ -335,6 +378,8 @@ async function conductGameplaySession(
         await wait(quickTest ? 0 : 1000); // Skip wait for quick test
       }
       
+      // Screenshot already added to state above (before pressing keys) to ensure metadata is captured even if error occurs
+
       state.actionHistory.push(
         quickTest ? `Quick test: [${keysToPress.join(', ')}]` : `LLM keys: [${keysToPress.join(', ')}] - ${reasoning}`
       );

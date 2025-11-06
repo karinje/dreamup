@@ -936,6 +936,1852 @@ Key methods to recognize:
 
 ---
 
+## Implementation Details
+
+### Agent Design Architecture
+
+The QA Agent follows a six-stage pipeline with LLM-powered decision making at critical points:
+
+```mermaid
+flowchart TD
+    Start([Start Test]) --> Init[1. INITIALIZE]
+    Init --> Observe[2. OBSERVE]
+    Observe --> Interact[3. INTERACT]
+    Interact --> Monitor[4. MONITOR]
+    Monitor --> Evaluate[5. EVALUATE]
+    Evaluate --> Report[6. REPORT]
+    Report --> End([End Test])
+    
+    Monitor --> |Game Over/Timeout| Evaluate
+    Monitor --> |Continue| Interact
+    
+    style Init fill:#667eea
+    style Observe fill:#764ba2
+    style Interact fill:#f093fb
+    style Monitor fill:#4facfe
+    style Evaluate fill:#43e97b
+    style Report fill:#fa709a
+```
+
+### Phase Transitions & Control Flow
+
+**Key Insight:** Stages 3 (INTERACT) and 4 (MONITOR) are **interleaved in a loop**, not sequential!
+
+```typescript
+// Pseudocode showing actual control flow
+// src/agent/navigation.ts lines 38-173
+
+async function navigateGame() {
+  // STAGE 1: INITIALIZE (one-time)
+  state.phase = 'loading'
+  await loadGame(url)
+  
+  // STAGE 2: OBSERVE (one-time, sequential LLM calls)
+  state.phase = 'start_screen'
+  modalResult = await LLM_detectModal(screenshot)      // LLM Call #1
+  if (modalResult.has_modal) await dismissModal()
+  
+  startResult = await LLM_findGameStart(screenshot)    // LLM Call #2
+  await executeStartAction()
+  
+  // STAGES 3 + 4: INTERACT + MONITOR (interleaved loop)
+  state.phase = 'gameplay'
+  for (i = 0; i < maxActions; i++) {
+    // ─────────────────────────────────────────
+    // MONITOR happens FIRST (every iteration)
+    // ─────────────────────────────────────────
+    if (!isPageResponsive()) {
+      break  // Exit to EVALUATE
+    }
+    
+    if (detectGameOver()) {
+      break  // Exit to EVALUATE
+    }
+    
+    if (isStuck(state)) {
+      attemptUnstick()
+    }
+    
+    if (timeoutExceeded()) {
+      break  // Exit to EVALUATE
+    }
+    
+    // ─────────────────────────────────────────
+    // INTERACT happens SECOND (after checks pass)
+    // ─────────────────────────────────────────
+    screenshot = captureScreenshot()
+    
+    if (quickTest) {
+      keys = pickRandomKeys()
+    } else {
+      keys = await LLM_getGameplayAction(screenshot)  // LLM Call #3-52
+    }
+    
+    executeKeys(keys)
+    wait(1000ms)
+    
+    // Loop continues...
+  }
+  
+  // STAGE 5: EVALUATE (one-time)
+  evaluation = await LLM_evaluatePlayability(         // LLM Call #53
+    screenshots, 
+    logs, 
+    actionHistory
+  )
+  
+  // STAGE 6: REPORT (one-time)
+  return generateReport(evaluation)
+}
+```
+
+### Phase Transition Decision Logic
+
+#### Transition 1: INITIALIZE → OBSERVE
+**Trigger:** Automatic after page load completes
+```typescript
+// src/index.ts line 204
+await loadGame(gameUrl)  // Waits for network idle
+// Automatically proceeds to OBSERVE
+```
+
+#### Transition 2: OBSERVE → INTERACT
+**Trigger:** Automatic after start mechanism executes
+```typescript
+// src/agent/navigation.ts lines 91-134
+const gameStartInfo = await findGameStart(screenshot)
+
+if (gameStartInfo.confidence > 0.5) {
+  await stagehand.act({ action: gameStartInfo.start_mechanism })
+}
+// Automatically proceeds to INTERACT+MONITOR loop
+```
+
+#### Transition 3: INTERACT ⟷ MONITOR (Loop)
+**Trigger:** Every iteration of gameplay loop
+```typescript
+// src/agent/navigation.ts lines 216-349
+for (let i = 0; i < maxActions && state.actionCount < maxActions; i++) {
+  
+  // ──────────────────────────────────────
+  // MONITOR: Check exit conditions FIRST
+  // ──────────────────────────────────────
+  
+  // Check #1: Page responsiveness
+  const responsive = await isPageResponsive()
+  if (!responsive) {
+    logger.warn('Page appears unresponsive')
+    break  // → Exit loop → EVALUATE
+  }
+  
+  // Check #2: Game over detection
+  const gameOver = await detectGameOver()
+  if (gameOver) {
+    logger.info('Game over detected during gameplay')
+    break  // → Exit loop → EVALUATE
+  }
+  
+  // Check #3: Stuck detection (implicit in loop)
+  if (await isStuck(state)) {
+    await attemptUnstick(state)
+    // Continue loop (give recovery a chance)
+  }
+  
+  // Check #4: Max actions (loop condition)
+  // Already in: for (i < maxActions && state.actionCount < maxActions)
+  
+  // Check #5: Timeout (enforced at higher level)
+  // Promise.race([testPromise, timeoutPromise]) in src/index.ts
+  
+  // ──────────────────────────────────────
+  // INTERACT: Execute action if checks passed
+  // ──────────────────────────────────────
+  
+  const screenshot = await captureScreenshot(...)
+  
+  if (quickTest) {
+    keys = pickRandomKey(controlScheme)
+  } else {
+    const action = await getGameplayAction(screenshot, ...)  // LLM call
+    keys = action.keys_to_press
+  }
+  
+  await pressKeys(keys)
+  // Loop continues to next iteration (back to MONITOR)
+}
+
+// All iterations complete → EVALUATE
+```
+
+#### Transition 4: MONITOR → EVALUATE
+**Triggers:** Any of these conditions break the INTERACT+MONITOR loop:
+
+1. **Game Over Detected**
+```typescript
+// Pattern matching on page content
+const gameOver = await detectGameOver()
+// Checks for: "game over", "you died", "you win", etc.
+if (gameOver) break  // → state.phase = 'game_over'
+```
+
+2. **Page Unresponsive**
+```typescript
+const responsive = await isPageResponsive()
+if (!responsive) break  // → state.phase = 'crashed'
+```
+
+3. **Max Actions Reached**
+```typescript
+for (let i = 0; i < maxActions; i++)  // Loop exits naturally
+// → state.phase = 'completed'
+```
+
+4. **Timeout Exceeded**
+```typescript
+// src/index.ts lines 92-96
+const timeoutPromise = new Promise((_, reject) => {
+  setTimeout(() => {
+    reject(new ExecutionTimeoutError(maxTime))
+  }, maxExecutionTime)
+})
+
+await Promise.race([testPromise, timeoutPromise])
+// If timeout wins → catch block → generateTimeoutReport
+```
+
+5. **Stuck State**
+```typescript
+const timeSinceLastAction = Date.now() - state.lastActionTime
+if (timeSinceLastAction > 30000) {
+  await attemptUnstick()
+  // If still stuck after recovery → next iteration likely breaks on other condition
+}
+```
+
+**After any break:** Proceeds to EVALUATE stage
+
+#### Transition 5: EVALUATE → REPORT
+**Trigger:** Automatic after LLM evaluation completes
+```typescript
+// src/index.ts lines 217-244
+const evaluation = await evaluatePlayability(...)  // LLM evaluation
+
+// Immediately proceeds to scoring and report generation
+const score = calculatePlayabilityScore(evaluation, issues)
+return generateReport(...)
+```
+
+### LLM Call Determination Logic
+
+**Which LLM function runs when:**
+
+```typescript
+// Decision tree for LLM usage
+
+if (phase === 'OBSERVE') {
+  // Always run these LLMs (all modes)
+  modalDetection = await detectModal(screenshot)
+  gameStart = await findGameStart(screenshot)
+}
+
+if (phase === 'INTERACT') {
+  // Decision based on mode
+  if (quickTest) {
+    // NO LLM - random key selection
+    keys = pickRandomKey()
+  } else {
+    // YES LLM - every gameplay iteration
+    for each action cycle {
+      gameplayAction = await getGameplayAction(
+        screenshot,
+        recentScreenshots,  // temporal context
+        actionHistory,
+        controlScheme,
+        gameContext
+      )
+    }
+  }
+}
+
+if (phase === 'EVALUATE') {
+  // Always use LLM for evaluation (all modes)
+  // Only INTERACT phase differs between modes
+  evaluation = await evaluatePlayability(
+    gameUrl,
+    screenshots,
+    actionHistory,
+    errorLogs,
+    duration
+  )
+}
+```
+
+### Example Flow Timeline
+
+**Normal LLM Mode (Pong game, 45 second test):**
+
+```
+00:00  INITIALIZE    Load https://game.com/pong
+00:02  OBSERVE       Screenshot captured
+00:03  └─ LLM #1     detectModal() → no modal found
+00:05  └─ LLM #2     findGameStart() → "Click green PLAY button"
+00:07  INTERACT      Click PLAY, game starts
+00:08  ├─ MONITOR    Check responsive? ✓  Game over? ✗
+00:08  ├─ INTERACT   Screenshot captured
+00:09  └─ LLM #3     getGameplayAction() → ["ArrowUp"]
+00:11  ├─ INTERACT   Press ArrowUp, wait 1s
+00:12  ├─ MONITOR    Check responsive? ✓  Game over? ✗
+00:12  ├─ INTERACT   Screenshot captured
+00:13  └─ LLM #4     getGameplayAction() → ["ArrowDown"]
+00:15  ├─ INTERACT   Press ArrowDown, wait 1s
+       ...
+00:44  ├─ MONITOR    Check responsive? ✓  Game over? ✓
+00:44  └─ BREAK      Exit gameplay loop
+00:45  EVALUATE      Collect evidence
+00:46  └─ LLM #53    evaluatePlayability() → {score: 77, ...}
+00:47  REPORT        Save qa-report.json, generate GIF
+00:48  DONE          Return QAReport
+```
+
+**Quick Test Mode (same game, 30 second test):**
+
+```
+00:00  INITIALIZE    Load https://game.com/pong
+00:02  OBSERVE       Screenshot captured
+00:03  └─ LLM #1     detectModal() → no modal found
+00:05  └─ LLM #2     findGameStart() → "Click green PLAY button"
+00:07  INTERACT      Click PLAY, game starts
+00:08  ├─ MONITOR    Check responsive? ✓  Game over? ✗
+00:08  ├─ INTERACT   Random key: ArrowUp (no LLM)
+00:09  ├─ MONITOR    Check responsive? ✓  Game over? ✗
+00:09  ├─ INTERACT   Random key: ArrowLeft (no LLM)
+00:10  ├─ MONITOR    Check responsive? ✓  Game over? ✗
+00:10  ├─ INTERACT   Random key: Space (no LLM)
+       ... (rapid key presses, 0.5s cycle, no LLM calls)
+00:28  ├─ MONITOR    Max actions reached (50)
+00:28  └─ BREAK      Exit gameplay loop
+00:29  EVALUATE      Collect evidence
+00:30  └─ LLM #3     evaluatePlayability() → {score: 72, ...}
+00:31  REPORT        Save qa-report.json, generate GIF
+00:32  DONE          Return QAReport (real score from LLM)
+```
+
+---
+
+#### Stage 1: INITIALIZE
+
+**Purpose:** Set up browser environment and load game
+
+**Implementation:**
+```typescript
+// src/index.ts lines 84-88, src/agent/browser.ts
+1. Initialize Browserbase session (headless Chrome)
+2. Set viewport size (1280x720)
+3. Setup console log listeners
+4. Create session output directory
+5. Load game URL with timeout (60s)
+6. Wait for network idle
+```
+
+**Modes:**
+- All modes use same initialization
+- URL may have query params added:
+  - `?speed=0.1` for speed control (normal/quick test)
+  - `?pauseMode=true` for pause-step mode
+
+**No LLM used** - Direct browser automation
+
+---
+
+#### Stage 2: OBSERVE
+
+**Purpose:** Analyze initial game state and handle blocking UI
+
+**Implementation - Phase 2A: Modal Detection**
+```typescript
+// src/agent/navigation.ts lines 58-88
+1. Wait 2 seconds for initial render
+2. Capture baseline screenshot
+3. Send screenshot to LLM for modal detection
+```
+
+**LLM Prompt (Modal Detection):**
+```
+You are analyzing a browser game interface to detect blocking modals or overlays.
+
+Look for:
+- Cookie consent banners
+- Age verification dialogs
+- Terms of service popups
+- Browser compatibility warnings
+- "Click to start" overlays
+
+Respond with JSON:
+{
+  "has_modal": true/false,
+  "modal_type": "cookie_consent|age_verify|terms|compatibility|other",
+  "recommended_action": "Click the 'Accept' button in bottom right",
+  "confidence": 0.0-1.0
+}
+```
+
+**LLM Output → Action:**
+- If `has_modal = true` and `confidence > 0.5`:
+  - Execute: `stagehand.act({ action: recommended_action })`
+  - Example: "Click the blue Accept button"
+  - Wait 2s, capture post-modal screenshot
+
+**Implementation - Phase 2B: Game Start Detection**
+```typescript
+// src/agent/navigation.ts lines 91-134
+4. Send current screenshot to LLM for start mechanism analysis
+```
+
+**LLM Prompt (Game Start):**
+```
+You are analyzing a browser game to determine how to start playing.
+
+Look for:
+- "Play", "Start", "Begin" buttons
+- "Click anywhere to start" overlays
+- Auto-start games (already playing)
+- Menu screens requiring navigation
+
+Action History (for context):
+1. Captured initial screenshot
+2. Dismissed cookie modal
+
+Respond with JSON:
+{
+  "game_state": "needs_start|already_started|menu_navigation_needed",
+  "start_mechanism": "Click the green PLAY button in center",
+  "confidence": 0.0-1.0,
+  "reasoning": "I see a large green button with 'PLAY' text..."
+}
+```
+
+**LLM Output → Action:**
+- If `game_state = "already_started"`:
+  - Skip to gameplay phase
+- If `confidence > 0.5`:
+  - Execute: `stagehand.act({ action: start_mechanism })`
+  - Example: "Click the green PLAY button"
+- If `confidence < 0.5`:
+  - Fallback: Click center of viewport
+
+**Modes:**
+- **All modes** use LLM for observe phase
+- Quick test also uses LLM here (only phase that does)
+
+---
+
+#### Stage 3: INTERACT (Gameplay)
+
+**Purpose:** Execute gameplay actions based on test mode
+
+### Mode 1: Normal LLM-Driven Gameplay (No Pause)
+
+**Implementation:**
+```typescript
+// src/agent/navigation.ts lines 178-371
+Game runs continuously (never paused)
+
+For each action cycle (up to maxActionCount):
+  1. Capture screenshot (game is still running)
+  2. Send screenshot + context to LLM (takes ~1-2 seconds, game keeps running)
+  3. Execute LLM's recommended keys
+  4. Wait 300ms between keys, 1000ms after all keys
+  
+Note: Game advances continuously, even during LLM thinking time.
+This means the game state may have changed by the time the LLM's
+decision is executed.
+```
+
+**When to Use:**
+- ✅ Third-party games (no pause control available)
+- ✅ Slower-paced games where LLM latency acceptable
+- ✅ Games with speed control via URL parameter (e.g., `?speed=0.1`)
+- ⚠️ Game progresses during LLM thinking (~1-2 seconds per decision)
+
+**LLM Prompt (Gameplay Action):**
+```
+You are playing a browser game. Analyze the screenshot and decide what keys to press.
+
+Game URL: https://game.com/pong
+Action History (last 10):
+1. LLM start game: Click the green PLAY button
+2. LLM keys: [ArrowUp] - move paddle up to intercept ball
+3. LLM keys: [ArrowDown] - ball moved down, following it
+...
+
+Available Controls (from input hints):
+- Actions: Jump (Space, W), Shoot (X)
+- Axes: MoveHorizontal (A/D, ArrowLeft/Right)
+
+Temporal Context (last 3 frames for direction/velocity):
+[Screenshot T-2] [Screenshot T-1] [Screenshot T]
+
+${gameContext ? `
+Game-Specific Instructions:
+You control the RIGHT paddle. The ball moves fast. Track its Y position
+and velocity. Move your paddle to intercept. React early.
+` : ''}
+
+Respond with JSON:
+{
+  "keys_to_press": ["ArrowUp"],
+  "reasoning": "Ball is moving down toward Y=450, paddle at Y=380, need to move up",
+  "confidence": 0.0-1.0
+}
+```
+
+**LLM Output → Action:**
+- Press each key in `keys_to_press` for 100ms
+- Wait 300ms between keys
+- Wait 1000ms after all keys
+- Log: `"LLM keys: [ArrowUp] - Ball moving down, intercepting"`
+
+**Key Features:**
+- **Temporal Context:** Last 3 screenshots show direction/velocity
+- **Game Context:** Optional strategy injection for complex games
+- **Control Hints:** Prioritizes known controls from input schema
+
+### Mode 2: Pause Mode (DreamUp Games)
+
+**Implementation:**
+```typescript
+// src/agent/navigation.ts lines 199-329
+Game starts paused via gamePause()
+
+For each action cycle:
+  1. [GAME PAUSED] Capture screenshot
+  2. [GAME PAUSED] LLM analyzes and decides keys
+  3. Call gameResume() - game runs at full 60fps
+  4. Press keys immediately (within 10ms of resume)
+  5. Wait exactly pauseInterval seconds (e.g., 0.5s)
+  6. Call gamePause() - freeze game for next cycle
+```
+
+**When to Use:**
+- ✅ DreamUp games with pause/resume control
+- ✅ Fast-paced games requiring frame-perfect timing
+- ✅ Need perfect LLM synchronization (game frozen during LLM thinking)
+- ✅ Temporal context important (ball tracking, enemy prediction)
+- ❌ Third-party games (no pause/resume API available)
+
+**Typical Values:**
+- `--pause 0.1` to `--pause 0.5`: Fast-paced games (Snake, Pong)
+- `--pause 1.0` to `--pause 2.0`: Slower games or turn-based
+
+**Synchronization:**
+```
+Timeline (pauseInterval = 0.5s):
+T=0.0s:  🟥 PAUSED → Screenshot → LLM thinking
+T=0.3s:  LLM returns ["ArrowUp"]
+T=0.3s:  🟢 RESUME + Press ArrowUp
+T=0.8s:  🟥 PAUSE (0.5s elapsed)
+T=0.8s:  Screenshot → LLM thinking
+T=1.1s:  LLM returns ["ArrowDown"]  
+T=1.1s:  🟢 RESUME + Press ArrowDown
+T=1.6s:  🟥 PAUSE (0.5s elapsed)
+...
+```
+
+**Same LLM Prompt** as Normal Mode
+- Temporal context crucial for tracking ball/enemy positions
+- LLM has full time to think while game is paused
+- Game runs at native speed during action window
+
+**Advantages:**
+- Perfect synchronization (no LLM latency issues)
+- LLM gets clean, stable screenshots
+- Game runs at full speed (no slowdown needed)
+- Precise control over how much time passes per decision
+
+### Mode 3: Quick Test Mode
+
+**Implementation:**
+```typescript
+// src/agent/navigation.ts lines 250-271
+For each action cycle:
+  1. Capture screenshot (for evidence only)
+  2. Pick random key from control scheme
+  3. Press key for 100ms
+  4. Wait 500ms
+  5. Repeat
+```
+
+**No LLM Prompts** - Random key selection:
+```javascript
+const availableKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', ' '];
+const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+pressKey(randomKey);
+```
+
+**Purpose:**
+- Fast functional verification (30-60 seconds)
+- Verify all controls are wired correctly
+- No strategic gameplay
+- Cost: ~$0.01 vs $0.50 for LLM mode
+
+---
+
+#### Stage 4: MONITOR
+
+**Purpose:** Detect game state changes and failure conditions
+
+**Implementation:**
+```typescript
+// src/agent/navigation.ts lines 219-349
+During gameplay loop:
+  1. Check page responsiveness (every cycle)
+  2. Detect game over screens (pattern matching)
+  3. Check for stuck state (no changes in 30s)
+  4. Enforce maxActionCount limit
+  5. Respect overall timeout
+```
+
+**Detection Methods:**
+
+**Game Over Detection:**
+```javascript
+// Pattern matching on page content
+const patterns = ['game over', 'you died', 'you lost', 'try again', 
+                  'you win', 'victory', 'congratulations'];
+const pageText = await page.textContent('body');
+return patterns.some(p => pageText.toLowerCase().includes(p));
+```
+
+**Stuck Detection:**
+```javascript
+const timeSinceLastAction = Date.now() - state.lastActionTime;
+if (timeSinceLastAction > 30000) {
+  // Attempt recovery: click center + random keys
+  await attemptUnstick(state);
+}
+```
+
+**Modes:**
+- All modes use same monitoring
+- Quick test has shorter timeout (30s default)
+
+---
+
+#### Stage 5: EVALUATE
+
+**Purpose:** Comprehensive AI-powered playability assessment
+
+**Trigger:** After gameplay loop exits (game over, max actions, timeout, or crash detected)
+
+**Implementation - Complete Flow:**
+
+```typescript
+// src/index.ts lines 214-245
+
+// STEP 1: Evidence Collection (no LLM yet)
+const errorLogs = getErrorLogs();              // All console errors from browser
+const duration = getTestDuration(gameState);   // Total test time in ms
+// gameState.screenshots already contains all captured screenshots
+// gameState.actionHistory already contains all actions performed
+// gameState.phase indicates final state ('game_over', 'completed', 'crashed')
+```
+
+**Evidence Prepared:**
+
+1. **Screenshots** (from `gameState.screenshots[]`)
+   - All screenshots captured during test (initial, modal, start, gameplay×N, final)
+   - Example: 8 screenshots total
+   - Format: `Screenshot[]` with `{path, timestamp, action, phase}`
+
+2. **Action History** (from `gameState.actionHistory[]`)
+   - Last 10 actions shown to LLM (full history available)
+   - Example:
+     ```
+     [
+       "Captured initial screenshot",
+       "Dismissed cookie_consent modal: Click Accept button",
+       "LLM start game: Click the green PLAY button",
+       "LLM keys: [ArrowUp] - move paddle up to intercept ball",
+       "LLM keys: [ArrowDown] - ball moved down, following",
+       ...
+       "Game over detected"
+     ]
+     ```
+
+3. **Console Logs** (from `getErrorLogs()`)
+   - Only ERROR level logs included
+   - Example:
+     ```json
+     [
+       {
+         "level": "error",
+         "message": "Failed to load font: game-font.woff2",
+         "timestamp": "2025-11-05T10:30:45Z"
+       },
+       {
+         "level": "error",
+         "message": "Uncaught TypeError: Cannot read property 'x' of undefined",
+         "timestamp": "2025-11-05T10:31:12Z"
+       }
+     ]
+     ```
+
+4. **Game Phases** (from `gameState.phase`)
+   - Array of phases traversed: `['loading', 'start_screen', 'gameplay', 'game_over']`
+
+5. **Test Duration** (calculated)
+   - `Date.now() - gameState.startTime` in milliseconds
+   - Example: 45200ms = 45.2 seconds
+
+---
+
+**STEP 2: Screenshot Selection (Smart Sampling)**
+
+```typescript
+// src/evaluation/analyzer.ts lines 578-605
+
+function selectRepresentativeScreenshots(screenshots: Screenshot[], maxCount: number) {
+  // Max 5 screenshots to avoid token limits (images are expensive)
+  
+  if (screenshots.length <= 5) {
+    return screenshots;  // Use all if we have 5 or fewer
+  }
+  
+  const selected = [];
+  
+  // Always include:
+  selected.push(screenshots[0]);                    // First (initial load)
+  selected.push(screenshots[screenshots.length - 1]); // Last (final state)
+  
+  // Evenly space remaining 3 screenshots from gameplay
+  // Example: 8 screenshots total
+  //   Index 0 (initial)
+  //   Index 2 (gameplay early)
+  //   Index 4 (gameplay mid)
+  //   Index 6 (gameplay late)
+  //   Index 7 (final)
+  
+  const remaining = maxCount - 2;  // 3 more needed
+  const step = Math.floor((screenshots.length - 2) / remaining);
+  
+  for (let i = 1; i < remaining + 1; i++) {
+    const index = i * step;
+    if (index < screenshots.length - 1) {
+      selected.push(screenshots[index]);
+    }
+  }
+  
+  return selected.sort((a, b) => 
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+}
+```
+
+**Result:** 5 representative screenshots showing game progression
+
+---
+
+**STEP 3: Screenshot Encoding (Base64 for LLM)**
+
+```typescript
+// src/evidence/screenshots.ts lines 118-128
+// src/evaluation/analyzer.ts lines 47-68
+
+async function prepareScreenshotsForLLM(screenshots: Screenshot[]) {
+  const images = [];
+  
+  for (const screenshot of screenshots) {
+    // Read PNG file from disk
+    const buffer = await fs.readFile(screenshot.path);
+    
+    // Convert to base64 string
+    const base64 = buffer.toString('base64');
+    
+    images.push({
+      type: 'image',
+      image: base64  // LLM can analyze this directly
+    });
+  }
+  
+  return images;
+}
+```
+
+**Result:** Array of base64-encoded images ready for LLM API
+
+---
+
+**STEP 4: LLM Call - Comprehensive Evaluation**
+
+```typescript
+// src/evaluation/analyzer.ts lines 243-290
+
+const model = getLLMModel();  // OpenAI GPT-4o or configured model
+const prompt = generatePlayabilityPrompt(gameUrl, duration, actionHistory, logs, phases);
+const images = await prepareScreenshotsForLLM(selectedScreenshots);
+
+const result = await generateText({
+  model,
+  system: QA_SYSTEM_PROMPT,  // "You are an expert QA engineer..."
+  messages: [{
+    role: 'user',
+    content: [
+      { type: 'text', text: prompt },  // Text prompt with context
+      ...images,                        // 5 base64-encoded screenshots
+    ],
+  }],
+});
+```
+
+**System Prompt:**
+```
+You are an expert QA engineer specializing in browser game testing.
+
+Your role is to:
+- Analyze screenshots and logs objectively
+- Identify functional issues and bugs
+- Assess playability and user experience
+- Provide confidence scores for your evaluations
+- Be specific in your observations
+
+Always respond with valid JSON in the requested format.
+Base your assessment on concrete evidence from screenshots and logs.
+```
+
+**User Prompt (Generated):**
+```
+You are a QA expert evaluating the overall playability of a browser game.
+
+Game URL: https://game.com/pong
+Test Duration: 45.2s
+Actions Performed: 23
+Console Errors: 2
+Console Warnings: 0
+Game Phases: loading → start_screen → gameplay → game_over
+
+Recent Actions (last 10):
+1. Captured initial screenshot
+2. Dismissed cookie modal: Click Accept button
+3. LLM start game: Click the green PLAY button
+4. LLM keys: [ArrowUp] - move paddle up to intercept ball
+5. LLM keys: [ArrowDown] - ball moved down, following
+6. LLM keys: [ArrowUp] - ball bouncing back up
+7. LLM keys: [ArrowDown] - tracking ball movement
+8. LLM keys: [ArrowUp] - quick reaction to bounce
+9. LLM keys: [] - waiting for ball to approach
+10. Game over detected
+
+Recent Errors:
+- Failed to load font: game-font.woff2
+- Uncaught TypeError: Cannot read property 'x' of undefined
+
+Based on the 5 screenshots and logs, evaluate:
+1. Did the game load successfully?
+2. Is the game interface visible and properly rendered?
+3. Do controls respond to user input?
+4. Did the game remain stable without crashing?
+5. Is the game in a playable state?
+
+Provide a comprehensive assessment in JSON format:
+{
+  "loaded_successfully": true/false,
+  "ui_visible": true/false,
+  "controls_responsive": true/false,
+  "game_stable": true/false,
+  "confidence": 0.0-1.0,
+  "observations": [
+    "specific observations about what you see",
+    "evidence of functionality or issues"
+  ],
+  "issues": [
+    "any problems that impact playability",
+    "critical bugs or failures"
+  ]
+}
+
+Be objective and base your assessment on visual evidence and error logs.
+```
+
+**LLM Response (Parsed):**
+```typescript
+// src/evaluation/analyzer.ts lines 74-87
+
+function parseLLMResponse(response: string) {
+  // Handle markdown code blocks: ```json {...} ```
+  const jsonMatch = response.match(/```json\n?([\s\S]*?)\n?```/);
+  const jsonStr = jsonMatch ? jsonMatch[1] : response;
+  
+  return JSON.parse(jsonStr);
+}
+
+// Example LLM Response:
+{
+  "loaded_successfully": true,
+  "ui_visible": true,
+  "controls_responsive": true,
+  "game_stable": false,  // Detected console errors
+  "confidence": 0.85,
+  "observations": [
+    "Game loaded with paddle and ball visible in first screenshot",
+    "Paddle position changes between screenshots indicating arrow key inputs worked",
+    "Ball physics working with realistic bounces",
+    "Score counter updates visible in gameplay frames",
+    "Game over screen appears in final screenshot",
+    "Console errors suggest potential stability issues"
+  ],
+  "issues": [
+    "Custom font failed to load (minor visual degradation)",
+    "JavaScript error detected: TypeError suggests potential crash risk",
+    "Ball speed increases very rapidly after 5 consecutive hits"
+  ]
+}
+```
+
+---
+
+**STEP 5: Score Calculation (Post-LLM Processing)**
+
+```typescript
+// src/index.ts lines 247-257
+// src/evaluation/scoring.ts
+
+// 5A: Generate Issues Array
+const issues = generateIssues(evaluation, errorLogs);
+```
+
+**Issue Generation Logic:**
+```typescript
+// src/evaluation/scoring.ts lines 104-182
+
+const issues = [];
+
+// Issue 1: Load failure (if LLM says loaded_successfully = false)
+if (!evaluation.loaded_successfully) {
+  issues.push({
+    severity: 'critical',
+    category: 'load',
+    description: 'Game failed to load successfully',
+    timestamp: new Date().toISOString()
+  });
+}
+
+// Issue 2: Controls not responsive (if LLM says controls_responsive = false)
+if (!evaluation.controls_responsive) {
+  issues.push({
+    severity: 'high',
+    category: 'controls',
+    description: 'Game controls are not responsive to user input',
+    timestamp: new Date().toISOString()
+  });
+}
+
+// Issue 3: Stability problems (if LLM says game_stable = false)
+if (!evaluation.game_stable) {
+  issues.push({
+    severity: 'high',
+    category: 'stability',
+    description: 'Game stability issues detected (crashes or freezes)',
+    timestamp: new Date().toISOString()
+  });
+}
+
+// Issue 4: UI visibility (if LLM says ui_visible = false)
+if (!evaluation.ui_visible) {
+  issues.push({
+    severity: 'medium',
+    category: 'ui',
+    description: 'Game UI elements not properly visible',
+    timestamp: new Date().toISOString()
+  });
+}
+
+// Issue 5-N: Issues from LLM's observations
+for (const issueText of evaluation.issues) {
+  issues.push({
+    severity: determineIssueSeverity(issueText),  // Pattern matching
+    category: categorizeIssue(issueText),         // Pattern matching
+    description: issueText,
+    timestamp: new Date().toISOString()
+  });
+}
+
+// Issue N+1: Critical console errors
+const criticalErrors = errorLogs.filter(log =>
+  log.message.toLowerCase().includes('uncaught') ||
+  log.message.toLowerCase().includes('fatal') ||
+  log.message.toLowerCase().includes('crash')
+).slice(0, 3);
+
+for (const error of criticalErrors) {
+  issues.push({
+    severity: 'high',
+    category: 'stability',
+    description: `Console error: ${error.message.substring(0, 100)}`,
+    timestamp: error.timestamp
+  });
+}
+```
+
+**Severity Determination (Pattern Matching):**
+```typescript
+// src/evaluation/scoring.ts lines 187-218
+
+function determineIssueSeverity(description: string) {
+  const lower = description.toLowerCase();
+  
+  if (lower.includes('crash') || lower.includes('fatal') || 
+      lower.includes('not load') || lower.includes('broken')) {
+    return 'critical';  // -30 points
+  }
+  
+  if (lower.includes('unresponsive') || lower.includes('freeze') || 
+      lower.includes('error') || lower.includes('fail')) {
+    return 'high';      // -15 points
+  }
+  
+  if (lower.includes('slow') || lower.includes('delay') || 
+      lower.includes('glitch') || lower.includes('bug')) {
+    return 'medium';    // -7 points
+  }
+  
+  return 'low';         // -3 points
+}
+```
+
+**Example Issues Array:**
+```json
+[
+  {
+    "severity": "high",
+    "category": "stability",
+    "description": "Game stability issues detected (crashes or freezes)",
+    "timestamp": "2025-11-05T10:31:15Z"
+  },
+  {
+    "severity": "medium",
+    "category": "load",
+    "description": "Custom font failed to load (minor visual degradation)",
+    "timestamp": "2025-11-05T10:31:15Z"
+  },
+  {
+    "severity": "high",
+    "category": "stability",
+    "description": "Console error: Uncaught TypeError: Cannot read property 'x' of undefined",
+    "timestamp": "2025-11-05T10:31:12Z"
+  },
+  {
+    "severity": "medium",
+    "category": "controls",
+    "description": "Ball speed increases very rapidly after 5 consecutive hits",
+    "timestamp": "2025-11-05T10:31:15Z"
+  }
+]
+```
+
+---
+
+**STEP 6: Playability Score Calculation**
+
+```typescript
+// src/evaluation/scoring.ts lines 38-78
+
+function calculatePlayabilityScore(evaluation: LLMEvaluation, issues: Issue[]) {
+  let score = 0;
+  
+  // ──────────────────────────────────────────────────
+  // STEP 6A: Base Score (0-100) from LLM Booleans
+  // ──────────────────────────────────────────────────
+  
+  if (evaluation.loaded_successfully) {
+    score += 100 * 0.3;  // 30 points (30% weight)
+  }
+  
+  if (evaluation.controls_responsive) {
+    score += 100 * 0.3;   // 30 points (30% weight)
+  }
+  
+  if (evaluation.game_stable) {
+    score += 100 * 0.3;  // 30 points (30% weight)
+  }
+  
+  if (evaluation.ui_visible) {
+    score += 100 * 0.1;  // 10 points (10% weight)
+  }
+  
+  // Example: All true = 100 points
+  
+  // ──────────────────────────────────────────────────
+  // STEP 6B: Apply Issue Penalties
+  // ──────────────────────────────────────────────────
+  
+  for (const issue of issues) {
+    const penalty = SEVERITY_PENALTIES[issue.severity];
+    score -= penalty;
+  }
+  
+  // SEVERITY_PENALTIES = {
+  //   critical: 30,
+  //   high: 15,
+  //   medium: 7,
+  //   low: 3
+  // }
+  
+  // Example: 100 - 15 (high) - 7 (medium) - 15 (high) - 7 (medium) = 56
+  
+  // ──────────────────────────────────────────────────
+  // STEP 6C: Confidence Adjustment
+  // ──────────────────────────────────────────────────
+  
+  score = score * evaluation.confidence;
+  
+  // Example: 56 × 0.85 = 47.6
+  
+  // ──────────────────────────────────────────────────
+  // STEP 6D: Clamp to 0-100 and Round
+  // ──────────────────────────────────────────────────
+  
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  
+  // Example: 48/100
+  return score;
+}
+```
+
+**Score Calculation Example:**
+
+```
+LLM Evaluation:
+├── loaded_successfully: true      → +30
+├── controls_responsive: true      → +30
+├── game_stable: false             → +0  (console errors detected)
+├── ui_visible: true               → +10
+└── confidence: 0.85
+                                    ─────
+                                    70 base
+
+Issues:
+├── HIGH: Stability issue          → -15
+├── MEDIUM: Font load error        → -7
+├── HIGH: Console error            → -15
+└── MEDIUM: Ball speed issue       → -7
+                                    ─────
+                                    70 - 44 = 26
+
+Confidence Adjustment:
+26 × 0.85 = 22.1 → rounds to 22
+
+FINAL SCORE: 22/100
+```
+
+---
+
+**STEP 7: Confidence Score Calculation**
+
+```typescript
+// src/evaluation/scoring.ts lines 83-99
+
+function calculateConfidenceScore(evaluation: LLMEvaluation, errorCount: number) {
+  let confidence = evaluation.confidence;  // From LLM (0.0-1.0)
+  
+  // Reduce confidence if many console errors
+  if (errorCount > 20) {
+    confidence *= 0.7;   // 30% reduction
+  } else if (errorCount > 10) {
+    confidence *= 0.85;  // 15% reduction
+  } else if (errorCount > 5) {
+    confidence *= 0.95;  // 5% reduction
+  }
+  
+  // Convert to 0-100 percentage
+  confidence = Math.max(0, Math.min(1, confidence)) * 100;
+  
+  return Math.round(confidence);
+}
+
+// Example: LLM confidence 0.85, errorCount 2 → 85% confidence
+```
+
+---
+
+**STEP 8: Test Status Determination**
+
+```typescript
+// src/evaluation/scoring.ts lines 248-266
+
+function determineTestStatus(score: number, issues: Issue[]) {
+  // Check for critical issues first
+  const hasCriticalIssues = issues.some(i => i.severity === 'critical');
+  if (hasCriticalIssues) {
+    return 'error';  // Game-breaking problems
+  }
+  
+  // Score-based determination
+  if (score >= 60) {
+    return 'pass';    // Playable
+  } else if (score >= 30) {
+    return 'fail';    // Has issues but somewhat playable
+  } else {
+    return 'error';   // Not playable
+  }
+}
+
+// Example: Score 22, no critical issues → status = 'error'
+```
+
+---
+
+**Complete Evaluation Result:**
+
+```typescript
+// After all processing:
+{
+  evaluation: {
+    loaded_successfully: true,
+    ui_visible: true,
+    controls_responsive: true,
+    game_stable: false,
+    confidence: 0.85,
+    observations: [...],
+    issues: [...]
+  },
+  issues: [
+    // 4 issues generated
+  ],
+  playabilityScore: 22,
+  confidenceScore: 85,
+  status: 'error'
+}
+```
+
+**Quick Test Mode Evaluation:**
+```javascript
+// Uses EXACT SAME LLM evaluation as other modes
+// The only difference is INTERACT phase used random keys
+evaluation = await evaluatePlayability(
+  gameUrl,
+  screenshots,        // All screenshots captured during random key presses
+  actionHistory,      // Random key actions logged (e.g., "Quick test: [ArrowUp]")
+  errorLogs,
+  [gameState.phase],
+  duration
+);
+
+// LLM analyzes evidence and provides real assessment
+// Result: Actual score based on visual analysis (not assumed 100/100)
+```
+
+---
+
+#### Stage 6: REPORT
+
+**Purpose:** Generate structured output and save artifacts
+
+**Trigger:** After evaluation completes successfully
+
+**Implementation - Complete Flow:**
+
+```typescript
+// src/index.ts lines 247-338
+
+// STEP 1: Collect all calculated values
+const issues = generateIssues(evaluation, errorLogs);
+const playabilityScore = calculatePlayabilityScore(evaluation, issues);
+const confidenceScore = calculateConfidenceScore(evaluation, errorLogs.length);
+const status = determineTestStatus(playabilityScore, issues);
+const viewport = await getViewportSize();
+```
+
+---
+
+**STEP 2: Build Metadata Object**
+
+```typescript
+// src/index.ts lines 259-280
+
+// Clean URL (remove query params for storage)
+const cleanUrl = gameUrl.split('?')[0];  // "https://game.com/pong?speed=0.1" → "https://game.com/pong"
+
+const metadata: TestMetadata = {
+  game_url: cleanUrl,
+  timestamp: new Date().toISOString(),  // "2025-11-05T10:30:15.123Z"
+  duration_ms: duration,               // 45200
+  browser: getBrowserInfo(),           // "Chrome/120.0.0"
+  viewport: viewport,                   // {width: 1280, height: 720}
+  llm_provider: config.llmProvider,     // "openai"
+  llm_model: model || config.llmModel, // "gpt-4o"
+  test_config: {
+    pause_interval: pauseInterval,      // 0.5 (if pause mode) or undefined
+    game_speed: gameSpeed,               // 0.1 (if speed control) or undefined
+    timeout_ms: timeoutMs,              // 180000 (3 minutes)
+    has_game_context: !!gameContext,     // true/false
+    has_input_hints: !!controlScheme,   // true/false
+    quick_test: !!quickTest,            // true/false
+  },
+};
+```
+
+---
+
+**STEP 3: Generate Animated GIF (Optional)**
+
+```typescript
+// src/index.ts lines 282-310
+// src/evidence/gif.ts
+
+if (config.enableGifRecording && gameState.screenshots.length > 1) {
+  try {
+    logger.info('Creating gameplay GIF');
+    
+    // Get GIF output path
+    const gifPath = getGifPath(sessionDir);
+    // Example: "output/pong_2025-11-05/gameplay.gif"
+    
+    // Get dimensions from first screenshot (using Sharp library)
+    const dimensions = await getOptimalDimensions(gameState.screenshots[0].path);
+    // Example: {width: 1280, height: 720}
+    
+    // Limit to 120 frames (max 60 seconds at 2 FPS)
+    const maxFrames = Math.min(gameState.screenshots.length, 120);
+    const screenshots = gameState.screenshots.slice(0, maxFrames);
+    
+    // Create GIF using gif-encoder-2 library
+    await createGif(screenshots, gifPath, {
+      width: dimensions.width,      // 1280
+      height: dimensions.height,     // 720
+      delay: 500,                    // 500ms per frame = 2 FPS
+      quality: 10,                    // 1 (best) to 20 (worst)
+    });
+    
+    // GIF creation process:
+    // 1. Initialize GIFEncoder(width, height)
+    // 2. For each screenshot:
+    //    - Read PNG file from disk
+    //    - Resize to 1280x720 using Sharp
+    //    - Convert to RGBA buffer
+    //    - Add frame to encoder
+    // 3. Finalize encoder
+    // 4. Save to file
+    
+    logger.info('GIF created successfully', { path: gifPath });
+    gifPath = gifPath;  // Store for report
+  } catch (error) {
+    logger.warn('Failed to create GIF, continuing without it', {
+      error: (error as Error).message,
+    });
+    gifPath = undefined;  // Report won't include GIF
+  }
+}
+```
+
+**GIF Creation Details:**
+- **Library:** `gif-encoder-2` + `sharp` (image processing)
+- **Frame Rate:** 2 FPS (500ms delay per frame)
+- **Max Duration:** 60 seconds (120 frames max)
+- **Quality:** 10 (balance between file size and quality)
+- **Resize:** All screenshots resized to consistent dimensions
+- **Format:** Animated GIF (loops forever)
+
+**File Size:** Typically 2-5 MB for 30-second gameplay
+
+---
+
+**STEP 4: Build QAReport Object**
+
+```typescript
+// src/index.ts lines 312-322
+
+const report: QAReport = {
+  status,                    // 'pass' | 'fail' | 'error'
+  playability_score: playabilityScore,  // 0-100
+  confidence_score: confidenceScore,    // 0-100
+  issues,                    // Issue[] array
+  screenshots: gameState.screenshots.map((s) => s.path),  // All screenshot paths
+  logs: [joinPath(sessionDir, 'logs', 'console-logs.json')],  // Log file path
+  metadata,                  // TestMetadata object
+  gif: gifPath,              // undefined if GIF creation failed
+};
+```
+
+**Complete Report Structure:**
+```json
+{
+  "status": "error",
+  "playability_score": 22,
+  "confidence_score": 85,
+  "issues": [
+    {
+      "severity": "high",
+      "category": "stability",
+      "description": "Game stability issues detected (crashes or freezes)",
+      "timestamp": "2025-11-05T10:31:15Z"
+    },
+    {
+      "severity": "medium",
+      "category": "load",
+      "description": "Custom font failed to load (minor visual degradation)",
+      "timestamp": "2025-11-05T10:31:15Z"
+    },
+    {
+      "severity": "high",
+      "category": "stability",
+      "description": "Console error: Uncaught TypeError: Cannot read property 'x' of undefined",
+      "timestamp": "2025-11-05T10:31:12Z"
+    },
+    {
+      "severity": "medium",
+      "category": "controls",
+      "description": "Ball speed increases very rapidly after 5 consecutive hits",
+      "timestamp": "2025-11-05T10:31:15Z"
+    }
+  ],
+  "screenshots": [
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/screenshots/loading_2025-11-05T10-30-15-456Z.png",
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/screenshots/loading_2025-11-05T10-30-17-789Z_after_modal_dismiss.png",
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/screenshots/start_screen_2025-11-05T10-30-20-012Z_after_start.png",
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/screenshots/gameplay_2025-11-05T10-30-22-345Z_gameplay_0.png",
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/screenshots/gameplay_2025-11-05T10-30-25-678Z_gameplay_1.png",
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/screenshots/gameplay_2025-11-05T10-30-28-901Z_gameplay_2.png",
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/screenshots/gameplay_2025-11-05T10-30-32-234Z_gameplay_3.png",
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/screenshots/game_over_2025-11-05T10-30-45-567Z_final_state.png"
+  ],
+  "gif": "output/game_com_pong_2025-11-05T10-30-15-123Z/gameplay.gif",
+  "logs": [
+    "output/game_com_pong_2025-11-05T10-30-15-123Z/logs/console-logs.json"
+  ],
+  "metadata": {
+    "game_url": "https://game.com/pong",
+    "timestamp": "2025-11-05T10:30:15.123Z",
+    "duration_ms": 45200,
+    "browser": "Chrome/120.0.0",
+    "viewport": {
+      "width": 1280,
+      "height": 720
+    },
+    "llm_provider": "openai",
+    "llm_model": "gpt-4o",
+    "test_config": {
+      "pause_interval": 0.5,
+      "timeout_ms": 180000,
+      "has_game_context": true,
+      "has_input_hints": true,
+      "quick_test": false
+    }
+  }
+}
+```
+
+---
+
+**STEP 5: Save Report to Disk**
+
+```typescript
+// src/index.ts lines 324-326
+// src/evidence/storage.ts
+
+const reportPath = joinPath(sessionDir, 'qa-report.json');
+await saveJSON(reportPath, report);
+
+// Directory structure:
+// output/
+//   └── game_com_pong_2025-11-05T10-30-15-123Z/
+//       ├── qa-report.json              ← Final report (THIS FILE)
+//       ├── gameplay.gif                ← Animated GIF (if enabled)
+//       ├── screenshots/
+//       │   ├── loading_2025-11-05T10-30-15-456Z.png
+//       │   ├── loading_2025-11-05T10-30-17-789Z_after_modal_dismiss.png
+//       │   ├── start_screen_2025-11-05T10-30-20-012Z_after_start.png
+//       │   ├── gameplay_2025-11-05T10-30-22-345Z_gameplay_0.png
+//       │   └── ... (all screenshots)
+//       └── logs/
+//           └── console-logs.json       ← All console logs
+```
+
+**saveJSON Implementation:**
+```typescript
+// src/evidence/storage.ts lines 82-98
+
+export async function saveJSON(filePath: string, data: any): Promise<void> {
+  const jsonString = JSON.stringify(data, null, 2);  // Pretty-printed with 2-space indent
+  await saveFile(filePath, jsonString);
+  
+  // File saved as UTF-8 JSON
+  // Valid JSON that can be parsed by any JSON parser
+}
+```
+
+---
+
+**STEP 6: Generate Summary Log**
+
+```typescript
+// src/index.ts lines 334-336
+// src/evaluation/scoring.ts lines 271-291
+
+const summary = generateSummary(status, playabilityScore, issues);
+logger.info(summary);
+
+// Example outputs:
+// "Game is fully playable with excellent performance (score: 100/100)"
+// "Game is playable with minor issues (score: 77/100, 2 issue(s))"
+// "Game has significant playability issues (score: 45/100, 3 high severity issue(s))"
+// "Game has critical failures preventing playability (score: 22/100, 1 critical issue(s))"
+```
+
+---
+
+**STEP 7: Return Report Object**
+
+```typescript
+// src/index.ts line 338
+
+return report;  // QAReport object returned to caller
+```
+
+**Caller receives:**
+- Complete `QAReport` object
+- All paths are relative to session directory
+- Can be used immediately (no file I/O needed)
+- Also saved to disk for persistence
+
+---
+
+### Report Generation Summary
+
+**Files Created:**
+1. ✅ `qa-report.json` - Main report (always created)
+2. ✅ `screenshots/*.png` - All screenshots (N files, where N = screenshots captured)
+3. ✅ `logs/console-logs.json` - Console logs (always created)
+4. ✅ `gameplay.gif` - Animated GIF (if enabled and 2+ screenshots)
+
+**Report Fields Breakdown:**
+
+| Field | Source | Example |
+|-------|--------|---------|
+| `status` | `determineTestStatus()` | `'pass'`, `'fail'`, `'error'` |
+| `playability_score` | `calculatePlayabilityScore()` | `0-100` |
+| `confidence_score` | `calculateConfidenceScore()` | `0-100` |
+| `issues` | `generateIssues()` | Array of `Issue` objects |
+| `screenshots` | `gameState.screenshots.map()` | Array of file paths |
+| `gif` | `createGif()` or `undefined` | GIF file path or null |
+| `logs` | Session directory + logs path | Array with log file path |
+| `metadata` | Test configuration + runtime info | Complete `TestMetadata` object |
+
+---
+
+### Frontend Display (Web Dashboard)
+
+**Backend API:**
+```javascript
+// viewer/server.js lines 65-95
+
+app.get('/api/reports', async (req, res) => {
+  const dirs = await readdir(OUTPUT_DIR);
+  const reports = [];
+  
+  for (const dir of dirs) {
+    if (dir === '.gitkeep') continue;
+    
+    const reportPath = join(OUTPUT_DIR, dir, 'qa-report.json');
+    try {
+      const data = await readFile(reportPath, 'utf-8');
+      const report = JSON.parse(data);
+      reports.push({
+        id: dir,  // Session directory name as ID
+        ...report,
+      });
+    } catch (err) {
+      console.error(`Failed to read report for ${dir}:`, err.message);
+    }
+  }
+  
+  // Sort by timestamp (newest first)
+  reports.sort((a, b) => 
+    new Date(b.metadata.timestamp) - new Date(a.metadata.timestamp)
+  );
+  
+  res.json(reports);
+});
+```
+
+**Dashboard Rendering:**
+```javascript
+// viewer/public/index.html lines 727-959
+
+// Load reports on page load
+async function loadReports() {
+  const response = await fetch('/api/reports');
+  allReports = await response.json();
+  updateStats();      // Update stats bar
+  renderReports();    // Render all report cards
+}
+
+// Render each report as a card
+function renderReports() {
+  container.innerHTML = filtered.map((report, idx) => `
+    <div class="report-card">
+      <!-- Summary line -->
+      <div class="report-summary">
+        <div class="report-url">${report.metadata.game_url}</div>
+        <div class="status-badge status-${report.status}">${report.status}</div>
+        <div class="score">${report.playability_score}/100</div>
+      </div>
+      
+      <!-- Expandable details -->
+      <div class="report-details">
+        <!-- Meta grid -->
+        <div class="meta-grid">
+          <div class="meta-item">
+            <div class="meta-label">Confidence</div>
+            <div class="meta-value">${report.confidence_score}%</div>
+          </div>
+          ...
+        </div>
+        
+        <!-- Test config badges -->
+        ${report.metadata.test_config ? `
+          <div class="config-section">
+            ${report.metadata.test_config.pause_interval ? `
+              <div class="config-badge">Pause: ${pause_interval}s</div>
+            ` : ''}
+            ${report.metadata.test_config.quick_test ? `
+              <div class="config-badge">⚡ Quick Test</div>
+            ` : ''}
+            ...
+          </div>
+        ` : ''}
+        
+        <!-- Issues section -->
+        ${report.issues.length > 0 ? `
+          <div class="collapsible-section">
+            <div class="section-header">Issues (${report.issues.length})</div>
+            ${report.issues.map(issue => `
+              <div class="issue ${issue.severity}">
+                <div class="issue-header">${issue.severity} - ${issue.category}</div>
+                <div class="issue-text">${issue.description}</div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        
+        <!-- GIF section -->
+        ${report.gif ? `
+          <div class="collapsible-section">
+            <div class="gif-container">
+              <img src="/${report.gif}" alt="Gameplay GIF">
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Screenshots grid -->
+        ${report.screenshots.length > 0 ? `
+          <div class="collapsible-section">
+            <div class="screenshots-grid">
+              ${report.screenshots.map((path, imgIdx) => `
+                <div class="screenshot-item" onclick="openScreenshot(${idx}, ${imgIdx})">
+                  <img src="/${path}" alt="Screenshot ${imgIdx + 1}" loading="lazy">
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+```
+
+**Dashboard Features:**
+- **List View:** All reports sorted by timestamp (newest first)
+- **Filter Dropdown:** Filter by status (all, pass, fail, error)
+- **Expand/Collapse:** Click report card to expand details
+- **Stats Bar:** Total tests, passed, failed, avg score
+- **Screenshot Modal:** Click thumbnail to view full-size with navigation
+- **Auto-refresh:** Polls `/api/reports` every 30 seconds
+
+**Visual Layout:**
+```
+┌─────────────────────────────────────────────────────┐
+│ 🎮 DreamUp QA                    [Filter: All ▼]    │
+├─────────────────────────────────────────────────────┤
+│ Stats: 15 Total | 10 Passed | 3 Failed | 2 Errors │
+│         Avg Score: 72                                  │
+├─────────────────────────────────────────────────────┤
+│                                                      │
+│ ┌────────────────────────────────────────────────┐ │
+│ │ 🗑️ https://game.com/pong                        │ │
+│ │ 🕐 Nov 5, 10:30 AM  ⏱️ 45.2s  📸 8 screenshots │ │
+│ │                          PASS    77/100      ▼ │ │
+│ ├────────────────────────────────────────────────┤ │
+│ │ [Expanded Details]                              │ │
+│ │ • Confidence: 85% | Issues: 2 | Chrome | gpt-4o│ │
+│ │ • ⚙️ Config: Pause 0.5s | Input Hints ✓        │ │
+│ │ • ❗ Issues (2) ▼                               │ │
+│ │   └─ [HIGH] Stability issue: ...               │ │
+│ │   └─ [MEDIUM] Font load error: ...             │ │
+│ │ • 🎥 Gameplay Recording ▼                       │ │
+│ │   └─ [Animated GIF plays here]                 │ │
+│ │ • 📸 Screenshots (8) ▼                          │ │
+│ │   └─ [Thumbnail grid with modal viewer]        │ │
+│ └────────────────────────────────────────────────┘ │
+│                                                      │
+│ [More report cards below...]                         │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+### Report Output Formats
+
+**1. JSON File (Primary Output)**
+- Location: `output/{session-id}/qa-report.json`
+- Format: Valid JSON, pretty-printed (2-space indent)
+- Size: Typically 5-20 KB
+- Contains: All test results, scores, issues, metadata
+
+**2. Screenshots (Evidence)**
+- Location: `output/{session-id}/screenshots/*.png`
+- Format: PNG images
+- Count: Variable (typically 5-50 screenshots)
+- Size: ~100-500 KB each
+- Naming: `{phase}_{timestamp}_{action}.png`
+
+**3. Console Logs (Evidence)**
+- Location: `output/{session-id}/logs/console-logs.json`
+- Format: JSON array of `LogEntry[]`
+- Contains: All console messages (error, warn, info, log)
+- Size: Typically 1-10 KB
+
+**4. Animated GIF (Evidence)**
+- Location: `output/{session-id}/gameplay.gif`
+- Format: Animated GIF
+- Duration: Up to 60 seconds (120 frames max)
+- Frame Rate: 2 FPS (500ms per frame)
+- Size: Typically 2-5 MB
+- Quality: 10 (balanced)
+
+---
+
+### Report Usage
+
+**1. Programmatic Access:**
+```typescript
+import { runQA } from 'dreamup-qa-agent';
+
+const report = await runQA('https://game.com/pong', {
+  timeout: 180000,
+  pauseInterval: 0.5,
+});
+
+// report.status → 'pass' | 'fail' | 'error'
+// report.playability_score → 0-100
+// report.issues → Issue[]
+// report.screenshots → string[]
+// report.metadata → TestMetadata
+```
+
+**2. File System Access:**
+```bash
+# Read report JSON
+cat output/game_com_pong_*/qa-report.json | jq .
+
+# View screenshots
+ls output/game_com_pong_*/screenshots/
+
+# View GIF
+open output/game_com_pong_*/gameplay.gif
+```
+
+**3. Web Dashboard:**
+- Navigate to `http://localhost:3001`
+- View all reports in browser
+- Click to expand details
+- View screenshots in modal viewer
+- Watch gameplay GIFs inline
+
+---
+
+### Report Data Flow
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ EVALUATE Phase Output                                    │
+│ ├── evaluation: LLMEvaluation                           │
+│ ├── issues: Issue[]                                     │
+│ ├── playabilityScore: 22                                │
+│ ├── confidenceScore: 85                                 │
+│ └── status: 'error'                                     │
+└─────────────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────────────┐
+│ REPORT Generation                                        │
+│ ├── Build metadata object                               │
+│ ├── Create GIF (optional)                              │
+│ ├── Build QAReport object                               │
+│ └── Save to disk                                        │
+└─────────────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────────────┐
+│ Files Created                                            │
+│ ├── qa-report.json (JSON)                               │
+│ ├── screenshots/*.png (N images)                        │
+│ ├── logs/console-logs.json (JSON)                       │
+│ └── gameplay.gif (animated GIF, optional)               │
+└─────────────────────────────────────────────────────────┘
+                      ↓
+┌─────────────────────────────────────────────────────────┐
+│ Frontend Display                                         │
+│ ├── Express.js serves /api/reports                      │
+│ ├── Dashboard renders report cards                      │
+│ ├── User expands to see details                         │
+│ └── Screenshots/GIF displayed inline                    │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+### LLM Usage Summary by Mode
+
+| Phase | Normal LLM | Pause Mode | Quick Test |
+|-------|-----------|------------|------------|
+| **Initialize** | ❌ No LLM | ❌ No LLM | ❌ No LLM |
+| **Observe** | ✅ Modal detection<br>✅ Game start detection | ✅ Modal detection<br>✅ Game start detection | ✅ Modal detection<br>✅ Game start detection |
+| **Interact (Gameplay)** | ✅ LLM-driven actions<br>(~50 calls) | ✅ LLM pause-interact loop<br>(~50 calls, game frozen) | ❌ Random keys<br>(no LLM) |
+| **Monitor** | ❌ Pattern matching | ❌ Pattern matching | ❌ Pattern matching |
+| **Evaluate** | ✅ Comprehensive assessment<br>(1 call) | ✅ Comprehensive assessment<br>(1 call) | ✅ Comprehensive assessment<br>(1 call) |
+| **Report** | ❌ JSON generation | ❌ JSON generation | ❌ JSON generation |
+| **Total LLM Calls** | ~52 calls | ~52 calls | ~3 calls |
+| **Estimated Cost** | $0.40-0.60 | $0.40-0.60 | $0.02-0.03 |
+
+---
+
+### Mode Selection Guide
+
+**Use Quick Test When:**
+- ✅ Fast functional verification needed (< 1 minute)
+- ✅ Just checking if controls are wired up
+- ✅ Running frequent smoke tests
+- ✅ Budget-conscious testing (saves ~$0.40 on gameplay LLM calls)
+- ✅ Still want accurate LLM-based evaluation of results
+- ❌ Don't need strategic gameplay during testing
+
+**Use Pause Mode When:**
+- ✅ Testing DreamUp games with pause control
+- ✅ Fast-paced games (60fps action)
+- ✅ Need perfect LLM synchronization (game frozen during LLM thinking)
+- ✅ Temporal context important (ball tracking, enemy prediction)
+- ❌ Game doesn't support pause/resume
+
+**Use Normal LLM Mode When:**
+- ✅ Testing third-party games
+- ✅ Game already runs slowly
+- ✅ Don't have pause control
+- ✅ Game speed can be controlled via URL param
+- ⚠️ Accept some LLM latency during gameplay
+
+---
+
 **Document Version History**
+- v1.3 (Nov 5, 2025): Fixed Quick Test evaluation (now uses LLM), updated LLM usage table with "Pause Mode" terminology, corrected mode comparisons and timelines
+- v1.2 (Nov 5, 2025): Added Implementation Details section with agent design architecture, LLM prompts, mode comparisons, and evaluation flow
 - v1.1 (Nov 4, 2025): Added Game Engine Context, Input Control Hints (F1.3b), updated API, added US-1.0, added Appendix D
 - v1.0 (Nov 3, 2025): Initial PRD created from project specification

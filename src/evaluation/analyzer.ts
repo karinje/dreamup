@@ -485,7 +485,8 @@ export async function getGameplayAction(
   controlScheme?: ControlScheme | null,
   modelName?: string,
   recentScreenshots?: Screenshot[],
-  gameContext?: string
+  gameContext?: string,
+  reasoningEffort?: 'low' | 'medium' | 'high'
 ): Promise<{
   keys_to_press: string[];
   reasoning: string;
@@ -512,6 +513,35 @@ export async function getGameplayAction(
       const labels = ['T-2 (oldest)', 'T-1 (previous)', 'T (current)'];
       const framesToSend = recentScreenshots!.slice(-3); // Last 3 frames max
       
+      // Extract just the filename for easy reference
+      const getFilename = (path: string) => path.split('/').pop() || path;
+      
+      const stepNumber = actionHistory.length + 1;
+      const framesInfo = framesToSend.map((s, idx) => {
+        const label = labels[labels.length - framesToSend.length + idx];
+        const filename = getFilename(s.path);
+        return {
+          label: label,
+          filename: filename,
+          fullPath: s.path,
+          fullFilename: filename, // Explicit full filename for clarity
+          timestamp: s.timestamp,
+        };
+      });
+      
+      // Log each frame separately for clarity
+      logger.info(`[STEP ${stepNumber}] Sending ${framesToSend.length} temporal context frames to LLM:`);
+      framesInfo.forEach((frame) => {
+        logger.info(`  ${frame.label}: ${frame.fullFilename} (full path: ${frame.fullPath})`);
+      });
+      
+      // Also log as structured data
+      logger.info(`[STEP ${stepNumber}] Temporal context details:`, {
+        step: stepNumber,
+        frameCount: framesToSend.length,
+        frames: framesInfo,
+      });
+      
       for (let i = 0; i < framesToSend.length; i++) {
         const label = labels[labels.length - framesToSend.length + i];
         content.push({ type: 'text', text: `\n=== FRAME ${label} ===` });
@@ -520,11 +550,37 @@ export async function getGameplayAction(
       }
     } else {
       // Single frame (first turn)
+      const getFilename = (path: string) => path.split('/').pop() || path;
+      const stepNumber = actionHistory.length + 1;
+      const filename = getFilename(currentScreenshot.path);
+      logger.info(`[STEP ${stepNumber}] Sending single frame to LLM:`);
+      logger.info(`  T (current): ${filename} (full path: ${currentScreenshot.path})`);
+      logger.info(`[STEP ${stepNumber}] Single frame details:`, {
+        step: stepNumber,
+        filename: filename,
+        fullFilename: filename,
+        fullPath: currentScreenshot.path,
+        timestamp: currentScreenshot.timestamp,
+      });
       const images = await prepareScreenshotsForLLM([currentScreenshot]);
       content.push(...images);
     }
 
-    const result = await generateText({
+    // Log what we're sending to LLM for debugging
+    const stepNumber = actionHistory.length + 1;
+    logger.info(`[STEP ${stepNumber}] LLM input summary:`, {
+      step: stepNumber,
+      promptLength: prompt.length,
+      promptPreview: prompt.substring(0, 300) + '...',
+      imageCount: content.filter((c: any) => c.type === 'image').length,
+      hasTemporalContext,
+      gameContext: gameContext ? 'present' : 'none',
+      actionHistoryLength: actionHistory.length,
+      recentActions: actionHistory.slice(-3),
+    });
+
+    // Build options object, including reasoning_effort if provided
+    const generateOptions: any = {
       model,
       system: 'You are an AI agent playing browser games. Analyze the game and decide the best action to take.',
       messages: [
@@ -536,7 +592,14 @@ export async function getGameplayAction(
           ],
         },
       ],
-    });
+    };
+    
+    // Add reasoning_effort for gpt-5 and o1 models
+    if (reasoningEffort && (modelName === 'gpt-5' || modelName === 'o1' || modelName === 'o1-mini')) {
+      generateOptions.reasoning_effort = reasoningEffort;
+    }
+
+    const result = await generateText(generateOptions);
 
     const parsed = parseLLMResponse<{
       game_type: string;

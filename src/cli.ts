@@ -10,6 +10,7 @@ import { runQA } from './index.js';
  * Parse command line arguments
  */
 const VALID_MODELS = [
+  'gpt-5',
   'gpt-4o',
   'gpt-4o-mini',
   'o1',
@@ -28,7 +29,7 @@ function parseArgs(): {
   model?: string;
   gameSpeed?: number;
   pauseInterval?: number;
-  enableThinking?: boolean;
+  reasoningEffort?: 'low' | 'medium' | 'high';
   timeout?: number;
   gameContext?: string;
   quickTest?: boolean;
@@ -45,7 +46,7 @@ function parseArgs(): {
     model: undefined as string | undefined,
     gameSpeed: undefined as number | undefined,
     pauseInterval: undefined as number | undefined,
-    enableThinking: false,
+    reasoningEffort: undefined as 'low' | 'medium' | 'high' | undefined,
     timeout: undefined as number | undefined,
     gameContext: undefined as string | undefined,
     quickTest: false,
@@ -80,8 +81,15 @@ function parseArgs(): {
       result.gameSpeed = parseFloat(args[++i]);
     } else if (arg === '--pause') {
       result.pauseInterval = parseFloat(args[++i]);
-    } else if (arg === '--thinking') {
-      result.enableThinking = true;
+    } else if (arg === '--reasoning-effort') {
+      const effort = args[++i];
+      if (effort === 'low' || effort === 'medium' || effort === 'high') {
+        result.reasoningEffort = effort;
+      } else {
+        console.error(`❌ Invalid reasoning effort: ${effort}`);
+        console.error(`Valid values: low, medium, high`);
+        process.exit(1);
+      }
     } else if (arg === '--timeout' || arg === '-t') {
       result.timeout = parseInt(args[++i], 10);
     } else if (arg === '--game-context' || arg === '--context') {
@@ -145,7 +153,7 @@ Options:
   --hints <text>          Input control hints (semantic description or JS snippet)
   --hints-type <type>     Hints type: 'semantic' or 'javascript' (default: semantic)
   -m, --model <name>      LLM model (default: gpt-4o)
-                          Options: gpt-4o, gpt-4o-mini, o1, o1-mini, gpt-4-turbo, gpt-4
+                          Options: gpt-5, gpt-4o, gpt-4o-mini, o1, o1-mini, gpt-4-turbo, gpt-4
   --speed <number>        Game speed multiplier (default: 1.0)
                           Examples: 0.1 (10% speed), 0.5 (50%), 2.0 (200%)
                           (Cannot be used with --pause)
@@ -158,7 +166,9 @@ Options:
                           Example: "You control the RIGHT paddle. Move to intercept the ball."
   --quick-test            Fast functional test mode - press all hint keys without LLM
                           (Default timeout: 30s. Cannot be used with --pause, --speed, --model)
-  --thinking              Enable reasoning/thinking mode (for o1 models)
+  --reasoning-effort <level>  Reasoning effort level for gpt-5 and o1 models
+                          Options: low, medium, high (default: medium)
+                          Example: --model gpt-5 --reasoning-effort high
   -h, --help              Show this help message
 
 Examples:
@@ -183,8 +193,11 @@ Examples:
   # Quick functional test (30s, no LLM)
   qa-agent https://game.com --hints "..." --quick-test
   
-  # Use reasoning model with thinking enabled
-  qa-agent https://game.com --model o1 --thinking
+  # Use gpt-5 with high reasoning effort
+  qa-agent https://game.com --model gpt-5 --reasoning-effort high
+  
+  # Use o1 model with medium reasoning effort
+  qa-agent https://game.com --model o1 --reasoning-effort medium
 
 Environment Variables:
   See .env.example for required configuration
@@ -287,7 +300,8 @@ async function main(): Promise<void> {
     console.log(`Control Hints: ${args.inputHintsType} format`);
   }
   if (args.model && !args.quickTest) {
-    console.log(`LLM Model: ${args.model}${args.enableThinking ? ' (thinking enabled)' : ''}`);
+    const reasoningInfo = args.reasoningEffort ? ` (reasoning effort: ${args.reasoningEffort})` : '';
+    console.log(`LLM Model: ${args.model || 'gpt-4o'}${reasoningInfo}`);
   }
   if (args.gameSpeed) {
     console.log(`Game Speed: ${args.gameSpeed * 100}%`);
@@ -334,6 +348,7 @@ async function main(): Promise<void> {
       maxExecutionTime: args.timeout,
       gameContext: args.gameContext,
       quickTest: args.quickTest,
+      reasoningEffort: args.reasoningEffort,
     });
 
     printResults(report);

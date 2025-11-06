@@ -161,7 +161,7 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 24px 28px;
+            padding: 28px;
             cursor: pointer;
             transition: background 0.2s;
         }
@@ -193,12 +193,61 @@
             gap: 15px;
             font-size: 12px;
             color: #94a3b8;
+            margin-bottom: 6px;
         }
 
         .report-meta-line span {
             display: flex;
             align-items: center;
             gap: 5px;
+        }
+
+        .report-meta-line-secondary {
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+            color: #64748b;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .report-meta-line-secondary span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .meta-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            background: rgba(102, 126, 234, 0.12);
+            border: 1px solid rgba(102, 126, 234, 0.25);
+            color: #a5b4fc;
+        }
+
+        .meta-badge svg {
+            width: 12px;
+            height: 12px;
+            stroke: currentColor;
+            fill: none;
+        }
+
+        .meta-badge-model {
+            background: rgba(139, 92, 246, 0.12);
+            border-color: rgba(139, 92, 246, 0.25);
+            color: #c4b5fd;
+        }
+
+        .meta-badge-context {
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.25);
+            color: #6ee7b7;
         }
 
         .report-summary-right {
@@ -391,6 +440,32 @@
             font-weight: 600;
         }
 
+        .config-context-section {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .config-context-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .config-context-text {
+            font-size: 13px;
+            line-height: 1.6;
+            color: #cbd5e1;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 12px;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
         /* Collapsible Sections */
         .collapsible-section {
             margin: 15px 0;
@@ -493,6 +568,36 @@
             color: #cbd5e1;
         }
 
+        /* Observations Section */
+        .observations-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .observation-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(102, 126, 234, 0.08);
+            border-radius: 8px;
+            border-left: 3px solid rgba(102, 126, 234, 0.4);
+        }
+
+        .observation-bullet {
+            color: #818cf8;
+            font-size: 18px;
+            font-weight: bold;
+            line-height: 1.2;
+        }
+
+        .observation-text {
+            flex: 1;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #cbd5e1;
+        }
+
         /* GIF Section */
         .gif-container {
             background: rgba(0, 0, 0, 0.3);
@@ -515,6 +620,12 @@
             gap: 14px;
         }
 
+        .screenshot-item-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
         .screenshot-item {
             position: relative;
             border-radius: 8px;
@@ -531,6 +642,82 @@
         .screenshot-item img {
             width: 100%;
             display: block;
+        }
+
+        .screenshot-llm-info {
+            background: rgba(102, 126, 234, 0.08);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .screenshot-action {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: #cbd5e1;
+        }
+
+        .action-keys {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #818cf8;
+            background: rgba(102, 126, 234, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            flex: 1;
+        }
+
+        .screenshot-reasoning {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+
+        .reasoning-text {
+            flex: 1;
+            font-style: italic;
+            font-size: 12px;
+        }
+
+        .temporal-context-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .temporal-context-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .temporal-frame {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .temporal-frame-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #64748b;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-align: center;
+            padding: 4px 8px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 4px;
         }
 
         /* Modal */
@@ -763,6 +950,42 @@
         function renderReports() {
             const container = document.getElementById('reports-container');
             
+            // Track expanded state before re-rendering
+            const expandedReportIds = new Set();
+            const expandedSectionMap = new Map(); // Map reportId -> Set of section names
+            
+            // Get currently expanded reports by their report ID
+            container.querySelectorAll('.report-card.expanded').forEach(card => {
+                const idx = parseInt(card.id.replace('report-', ''));
+                const filtered = currentFilter === 'all' 
+                    ? allReports 
+                    : allReports.filter(r => r.status === currentFilter);
+                if (filtered[idx]) {
+                    expandedReportIds.add(filtered[idx].id);
+                }
+            });
+            
+            // Get currently expanded sections by report ID
+            container.querySelectorAll('.collapsible-section.expanded').forEach(section => {
+                const sectionId = section.id;
+                // Extract report index from section ID (e.g., "issues-0" -> idx=0)
+                const match = sectionId.match(/^(.+)-(\d+)$/);
+                if (match) {
+                    const sectionName = match[1];
+                    const idx = parseInt(match[2]);
+                    const filtered = currentFilter === 'all' 
+                        ? allReports 
+                        : allReports.filter(r => r.status === currentFilter);
+                    if (filtered[idx]) {
+                        const reportId = filtered[idx].id;
+                        if (!expandedSectionMap.has(reportId)) {
+                            expandedSectionMap.set(reportId, new Set());
+                        }
+                        expandedSectionMap.get(reportId).add(sectionName);
+                    }
+                }
+            });
+            
             const filtered = currentFilter === 'all' 
                 ? allReports 
                 : allReports.filter(r => r.status === currentFilter);
@@ -802,6 +1025,50 @@
                                         ${report.screenshots.length} screenshots
                                     </span>
                                 </div>
+                                <div class="report-meta-line-secondary">
+                                    <span class="meta-badge meta-badge-model">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                        ${report.metadata.llm_model || 'N/A'}${report.metadata.reasoning_effort ? ` · ${report.metadata.reasoning_effort}` : ''}
+                                    </span>
+                                    ${report.metadata.test_config ? `
+                                        ${report.metadata.test_config.timeout_ms ? `
+                                            <span class="meta-badge">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/></svg>
+                                                ${(report.metadata.test_config.timeout_ms / 60000).toFixed(1)} min
+                                            </span>
+                                        ` : ''}
+                                        ${report.metadata.test_config.pause_interval ? `
+                                            <span class="meta-badge">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                                ${report.metadata.test_config.pause_interval}s
+                                            </span>
+                                        ` : ''}
+                                        ${report.metadata.test_config.game_speed ? `
+                                            <span class="meta-badge">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                                ${report.metadata.test_config.game_speed}%
+                                            </span>
+                                        ` : ''}
+                                        ${report.metadata.test_config.quick_test ? `
+                                            <span class="meta-badge">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                                Quick Test
+                                            </span>
+                                        ` : ''}
+                                        ${report.metadata.test_config.has_input_hints ? `
+                                            <span class="meta-badge">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01"/></svg>
+                                                Input Hints
+                                            </span>
+                                        ` : ''}
+                                        ${report.metadata.test_config.has_game_context ? `
+                                            <span class="meta-badge meta-badge-context">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                                                Context
+                                            </span>
+                                        ` : ''}
+                                    ` : ''}
+                                </div>
                             </div>
                         </div>
                         <div class="report-summary-right">
@@ -831,53 +1098,94 @@
                                 </div>
                                 <div class="meta-item">
                                     <div class="meta-label">LLM Model</div>
-                                    <div class="meta-value" style="font-size: 12px;">${report.metadata.llm_model}</div>
+                                    <div class="meta-value" style="font-size: 12px;">${report.metadata.llm_model}${report.metadata.reasoning_effort ? ` · ${report.metadata.reasoning_effort}` : ''}</div>
                                 </div>
                             </div>
 
-                            ${report.metadata.test_config ? `
+                            ${report.score_breakdown ? `
+                                <div class="collapsible-section" id="score-${idx}">
+                                    <div class="section-header" onclick="toggleSection('score-${idx}')">
+                                        <div class="section-title">
+                                            <span>Score Breakdown</span>
+                                        </div>
+                                        <div class="section-toggle">▼</div>
+                                    </div>
+                                    <div class="section-content">
+                                        <div class="section-body">
+                                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                                <!-- Base Components -->
+                                                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                    <div style="font-size: 9px; color: #6ee7b7; margin-bottom: 2px;">Load</div>
+                                                    <div style="font-size: 16px; font-weight: 700; color: #10b981;">${Math.round(report.score_breakdown.base_scores.load_success)}</div>
+                                                </div>
+                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
+                                                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                    <div style="font-size: 9px; color: #93c5fd; margin-bottom: 2px;">Controls</div>
+                                                    <div style="font-size: 16px; font-weight: 700; color: #3b82f6;">${Math.round(report.score_breakdown.base_scores.controls)}</div>
+                                                </div>
+                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
+                                                <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                    <div style="font-size: 9px; color: #c4b5fd; margin-bottom: 2px;">Stability</div>
+                                                    <div style="font-size: 16px; font-weight: 700; color: #8b5cf6;">${Math.round(report.score_breakdown.base_scores.stability)}</div>
+                                                </div>
+                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
+                                                <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                    <div style="font-size: 9px; color: #fbbf24; margin-bottom: 2px;">UI</div>
+                                                    <div style="font-size: 16px; font-weight: 700; color: #f59e0b;">${Math.round(report.score_breakdown.base_scores.ui_visibility)}</div>
+                                                </div>
+                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
+                                                <div style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                    <div style="font-size: 9px; color: #94a3b8; margin-bottom: 2px;">Base</div>
+                                                    <div style="font-size: 16px; font-weight: 700; color: #60a5fa;">${report.score_breakdown.total_base}</div>
+                                                </div>
+                                                ${report.score_breakdown.issue_penalties.total > 0 ? `
+                                                    <div style="font-size: 16px; color: #64748b; font-weight: 600;">−</div>
+                                                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                        <div style="font-size: 9px; color: #fca5a5; margin-bottom: 2px;">Penalties</div>
+                                                        <div style="font-size: 16px; font-weight: 700; color: #ef4444;">${report.score_breakdown.issue_penalties.total}</div>
+                                                    </div>
+                                                    <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
+                                                    <div style="background: rgba(102, 126, 234, 0.12); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                        <div style="font-size: 9px; color: #94a3b8; margin-bottom: 2px;">After</div>
+                                                        <div style="font-size: 16px; font-weight: 700; color: #60a5fa;">${report.score_breakdown.after_penalties}</div>
+                                                    </div>
+                                                ` : ''}
+                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">×</div>
+                                                <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 80px; text-align: center;">
+                                                    <div style="font-size: 9px; color: #c4b5fd; margin-bottom: 2px;">Confidence</div>
+                                                    <div style="font-size: 16px; font-weight: 700; color: #a78bfa;">${report.score_breakdown.confidence_factor}%</div>
+                                                </div>
+                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
+                                                <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                    <div style="font-size: 9px; color: #cbd5e1; margin-bottom: 2px;">Final</div>
+                                                    <div style="font-size: 18px; font-weight: 700; color: #818cf8;">${report.score_breakdown.final_score}</div>
+                                                </div>
+                                            </div>
+                                            ${report.score_breakdown.issue_penalties.total > 0 ? `
+                                                <div style="background: rgba(0, 0, 0, 0.2); border-radius: 4px; padding: 6px 8px; font-size: 10px; color: #94a3b8; margin-top: 8px;">
+                                                    <strong>Penalties:</strong> 
+                                                    ${report.score_breakdown.issue_penalties.critical > 0 ? `Critical: -${report.score_breakdown.issue_penalties.critical} ` : ''}
+                                                    ${report.score_breakdown.issue_penalties.high > 0 ? `High: -${report.score_breakdown.issue_penalties.high} ` : ''}
+                                                    ${report.score_breakdown.issue_penalties.medium > 0 ? `Medium: -${report.score_breakdown.issue_penalties.medium} ` : ''}
+                                                    ${report.score_breakdown.issue_penalties.low > 0 ? `Low: -${report.score_breakdown.issue_penalties.low}` : ''}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            ${report.metadata.test_config?.game_context ? `
                                 <div class="config-section">
                                     <div class="config-title">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: currentColor; fill: none;">
-                                            <circle cx="12" cy="12" r="3"/>
-                                            <path d="M12 1v6m0 6v6m5.2-13a6 6 0 0 1 4.8 4.8m-18 0A6 6 0 0 1 6.8 5.2M18 18a6 6 0 0 1-4.8 4.8m0-18A6 6 0 0 0 4.2 6"/>
+                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
                                         </svg>
-                                        Test Configuration
+                                        Game Context Details
                                     </div>
-                                    <div class="config-badges">
-                                        ${report.metadata.test_config.pause_interval ? `
-                                            <div class="config-badge">
-                                                <span class="config-badge-label">Pause:</span>
-                                                <span class="config-badge-value">${report.metadata.test_config.pause_interval}s</span>
-                                            </div>
-                                        ` : ''}
-                                        ${report.metadata.test_config.game_speed ? `
-                                            <div class="config-badge">
-                                                <span class="config-badge-label">Speed:</span>
-                                                <span class="config-badge-value">${report.metadata.test_config.game_speed}%</span>
-                                            </div>
-                                        ` : ''}
-                                        ${report.metadata.test_config.timeout_ms ? `
-                                            <div class="config-badge">
-                                                <span class="config-badge-label">Timeout:</span>
-                                                <span class="config-badge-value">${(report.metadata.test_config.timeout_ms / 60000).toFixed(1)} min</span>
-                                            </div>
-                                        ` : ''}
-                                        ${report.metadata.test_config.has_input_hints ? `
-                                            <div class="config-badge">
-                                                <span class="config-badge-value">✓ Input Hints</span>
-                                            </div>
-                                        ` : ''}
-                                        ${report.metadata.test_config.has_game_context ? `
-                                            <div class="config-badge">
-                                                <span class="config-badge-value">✓ Game Context</span>
-                                            </div>
-                                        ` : ''}
-                                        ${report.metadata.test_config.quick_test ? `
-                                            <div class="config-badge">
-                                                <span class="config-badge-value">⚡ Quick Test</span>
-                                            </div>
-                                        ` : ''}
+                                    <div class="config-context-section" style="margin-top: 12px; padding-top: 0; border-top: none;">
+                                        <div class="config-context-text">${report.metadata.test_config.game_context}</div>
                                     </div>
                                 </div>
                             ` : ''}
@@ -907,6 +1215,30 @@
                                                     </div>
                                                 </div>
                                             `).join('')}
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            ${report.observations && report.observations.length > 0 ? `
+                                <div class="collapsible-section" id="observations-${idx}">
+                                    <div class="section-header" onclick="toggleSection('observations-${idx}')">
+                                        <div class="section-title">
+                                            <span>LLM Observations</span>
+                                            <span class="section-count">${report.observations.length}</span>
+                                        </div>
+                                        <div class="section-toggle">▼</div>
+                                    </div>
+                                    <div class="section-content">
+                                        <div class="section-body">
+                                            <div class="observations-list">
+                                                ${report.observations.map((obs, obsIdx) => `
+                                                    <div class="observation-item">
+                                                        <div class="observation-bullet">•</div>
+                                                        <div class="observation-text">${obs}</div>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -942,11 +1274,38 @@
                                     <div class="section-content">
                                         <div class="section-body">
                                             <div class="screenshots-grid">
-                                                ${report.screenshots.map((path, imgIdx) => `
-                                                    <div class="screenshot-item" onclick="openScreenshot(${idx}, ${imgIdx})">
-                                                        <img src="/${path}" alt="Screenshot ${imgIdx + 1}" loading="lazy">
+                                                ${(report.screenshot_metadata || report.screenshots.map(path => ({ path }))).map((screenshot, imgIdx) => {
+                                                    const path = typeof screenshot === 'string' ? screenshot : screenshot.path;
+                                                    const metadata = typeof screenshot === 'object' ? screenshot : null;
+                                                    return `
+                                                    <div class="screenshot-item-wrapper">
+                                                        <div class="screenshot-item" onclick="openScreenshot(${idx}, ${imgIdx})">
+                                                            <img src="/${path}" alt="Screenshot ${imgIdx + 1}" loading="lazy">
+                                                        </div>
+                                                        ${metadata && (metadata.llm_action || metadata.llm_reasoning) ? `
+                                                            <div class="screenshot-llm-info">
+                                                                ${metadata.llm_action ? `
+                                                                    <div class="screenshot-action">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: #818cf8; flex-shrink: 0;">
+                                                                            <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                                                            <path d="M6 8h.01M10 8h.01M14 8h.01"/>
+                                                                        </svg>
+                                                                        <span class="action-keys">${metadata.llm_action}</span>
+                                                                    </div>
+                                                                ` : ''}
+                                                                ${metadata.llm_reasoning ? `
+                                                                    <div class="screenshot-reasoning">
+                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: #94a3b8; flex-shrink: 0; margin-top: 2px;">
+                                                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                                                        </svg>
+                                                                        <span class="reasoning-text">${metadata.llm_reasoning}</span>
+                                                                    </div>
+                                                                ` : ''}
+                                                            </div>
+                                                        ` : ''}
                                                     </div>
-                                                `).join('')}
+                                                `;
+                                                }).join('')}
                                             </div>
                                         </div>
                                     </div>
@@ -956,6 +1315,27 @@
                     </div>
                 </div>
             `).join('');
+            
+            // Restore expanded state after rendering
+            filtered.forEach((report, idx) => {
+                if (expandedReportIds.has(report.id)) {
+                    const card = document.getElementById(`report-${idx}`);
+                    if (card) {
+                        card.classList.add('expanded');
+                    }
+                }
+                
+                // Restore expanded sections for this report
+                if (expandedSectionMap.has(report.id)) {
+                    const expandedSections = expandedSectionMap.get(report.id);
+                    expandedSections.forEach(sectionName => {
+                        const section = document.getElementById(`${sectionName}-${idx}`);
+                        if (section) {
+                            section.classList.add('expanded');
+                        }
+                    });
+                }
+            });
         }
 
         // Toggle report expand/collapse

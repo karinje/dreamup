@@ -58,6 +58,13 @@ export interface Screenshot {
   timestamp: string;
   action?: string;
   phase?: GamePhase;
+  llm_action?: string;      // Keys pressed after this screenshot (e.g., "ArrowUp, ArrowRight")
+  llm_reasoning?: string;   // LLM's reasoning for the action
+  temporal_context?: {      // Screenshots sent to LLM along with this one (for debugging)
+    t_minus_2?: string;     // Path to T-2 frame (oldest)
+    t_minus_1?: string;     // Path to T-1 frame (previous)
+    t_current: string;      // Path to T frame (current) - this screenshot
+  };
 }
 
 /**
@@ -91,14 +98,39 @@ export interface TestMetadata {
   viewport: Viewport;
   llm_provider: string;
   llm_model: string;
+  reasoning_effort?: 'low' | 'medium' | 'high';
   test_config?: {
     pause_interval?: number;
     game_speed?: number;
     timeout_ms?: number;
     has_game_context?: boolean;
+    game_context?: string;
     has_input_hints?: boolean;
     quick_test?: boolean;
   };
+}
+
+/**
+ * Score breakdown details
+ */
+export interface ScoreBreakdown {
+  base_scores: {
+    load_success: number;
+    controls: number;
+    stability: number;
+    ui_visibility: number;
+  };
+  total_base: number;
+  issue_penalties: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    total: number;
+  };
+  after_penalties: number;
+  confidence_factor: number;
+  final_score: number;
 }
 
 /**
@@ -108,8 +140,11 @@ export interface QAReport {
   status: TestStatus;
   playability_score: number;
   confidence_score: number;
+  score_breakdown?: ScoreBreakdown;
   issues: Issue[];
-  screenshots: string[];
+  observations?: string[];
+  screenshots: string[];  // Deprecated: use screenshot_metadata instead
+  screenshot_metadata?: Screenshot[];  // Full screenshot metadata with LLM actions
   logs: string[];
   metadata: TestMetadata;
   gif?: string;
@@ -254,6 +289,7 @@ export interface QAOptions {
   gameSpeed?: number; // Game speed percentage (for ?speed=X or ?testMode=true)
   gameContext?: string; // Game-specific context/instructions for the AI
   quickTest?: boolean; // Fast functional test mode - press all keys without LLM
+  reasoningEffort?: 'low' | 'medium' | 'high'; // Reasoning effort for gpt-5 and o1 models
 }
 
 /**

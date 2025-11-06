@@ -3,7 +3,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { LLMEvaluation, Issue, IssueSeverity, LogEntry } from '../types/index.js';
+import { LLMEvaluation, Issue, IssueSeverity, LogEntry, ScoreBreakdown } from '../types/index.js';
 
 /**
  * Weight factors for playability score calculation
@@ -36,45 +36,56 @@ const SEVERITY_PENALTIES: Record<IssueSeverity, number> = {
  * - 0-19: Not playable
  */
 export function calculatePlayabilityScore(evaluation: LLMEvaluation, issues: Issue[]): number {
-  logger.debug('Calculating playability score');
+  const breakdown = calculatePlayabilityScoreWithBreakdown(evaluation, issues);
+  return breakdown.final_score;
+}
 
-  let score = 0;
+/**
+ * Calculate playability score with detailed breakdown
+ */
+export function calculatePlayabilityScoreWithBreakdown(
+  evaluation: LLMEvaluation, 
+  issues: Issue[]
+): ScoreBreakdown {
+  logger.debug('Calculating playability score with breakdown');
 
-  // Factor 1: Load success (30%)
-  if (evaluation.loaded_successfully) {
-    score += 100 * SCORE_WEIGHTS.loadSuccess;
-  }
+  // Calculate base scores
+  const baseScores = {
+    load_success: evaluation.loaded_successfully ? 100 * SCORE_WEIGHTS.loadSuccess : 0,
+    controls: evaluation.controls_responsive ? 100 * SCORE_WEIGHTS.controls : 0,
+    stability: evaluation.game_stable ? 100 * SCORE_WEIGHTS.stability : 0,
+    ui_visibility: evaluation.ui_visible ? 100 * SCORE_WEIGHTS.uiVisibility : 0,
+  };
 
-  // Factor 2: Controls responsiveness (30%)
-  if (evaluation.controls_responsive) {
-    score += 100 * SCORE_WEIGHTS.controls;
-  }
+  const totalBase = Object.values(baseScores).reduce((sum, val) => sum + val, 0);
 
-  // Factor 3: Stability (30%)
-  if (evaluation.game_stable) {
-    score += 100 * SCORE_WEIGHTS.stability;
-  }
+  // Calculate issue penalties
+  const issuePenalties = {
+    critical: issues.filter(i => i.severity === 'critical').length * SEVERITY_PENALTIES.critical,
+    high: issues.filter(i => i.severity === 'high').length * SEVERITY_PENALTIES.high,
+    medium: issues.filter(i => i.severity === 'medium').length * SEVERITY_PENALTIES.medium,
+    low: issues.filter(i => i.severity === 'low').length * SEVERITY_PENALTIES.low,
+    total: 0,
+  };
+  issuePenalties.total = issuePenalties.critical + issuePenalties.high + issuePenalties.medium + issuePenalties.low;
 
-  // Factor 4: UI visibility (10%)
-  if (evaluation.ui_visible) {
-    score += 100 * SCORE_WEIGHTS.uiVisibility;
-  }
+  const afterPenalties = totalBase - issuePenalties.total;
 
-  // Apply issue penalties
-  for (const issue of issues) {
-    const penalty = SEVERITY_PENALTIES[issue.severity];
-    score -= penalty;
-  }
+  // Apply confidence factor
+  const finalScore = Math.max(0, Math.min(100, Math.round(afterPenalties * evaluation.confidence)));
 
-  // Apply confidence factor (lower confidence = lower score)
-  score = score * evaluation.confidence;
+  const breakdown: ScoreBreakdown = {
+    base_scores: baseScores,
+    total_base: Math.round(totalBase),
+    issue_penalties: issuePenalties,
+    after_penalties: Math.round(afterPenalties),
+    confidence_factor: Math.round(evaluation.confidence * 100),
+    final_score: finalScore,
+  };
 
-  // Clamp to 0-100
-  score = Math.max(0, Math.min(100, Math.round(score)));
+  logger.info('Playability score calculated', { score: finalScore, breakdown });
 
-  logger.info('Playability score calculated', { score });
-
-  return score;
+  return breakdown;
 }
 
 /**

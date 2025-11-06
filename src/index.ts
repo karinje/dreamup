@@ -16,10 +16,10 @@ import {
 } from './agent/browser.js';
 import { setupLogListeners, saveLogs, getErrorLogs, clearLogs } from './evidence/logs.js';
 import { createSessionDirectory, saveJSON, joinPath } from './evidence/storage.js';
-import { createGameState, navigateGame, getTestDuration } from './agent/navigation.js';
+import { createGameState, navigateGame, getTestDuration, getCurrentGameState } from './agent/navigation.js';
 import { evaluatePlayability } from './evaluation/analyzer.js';
 import {
-  calculatePlayabilityScore,
+  calculatePlayabilityScoreWithBreakdown,
   calculateConfidenceScore,
   generateIssues,
   determineTestStatus,
@@ -33,7 +33,7 @@ import { createGif, getGifPath, getOptimalDimensions } from './evidence/gif.js';
 export async function runQA(gameUrl: string, options?: QAOptions): Promise<QAReport> {
   const startTime = Date.now();
   let sessionDir: string | null = null;
-  let gameState: GameState | null = null;
+  let controlScheme: ControlScheme | null = null;
 
   try {
     // Initialize configuration
@@ -62,7 +62,6 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
     logger.info('Starting QA test', { gameUrl, options });
 
     // Parse input hints if provided
-    let controlScheme: ControlScheme | null = null;
     if (options?.inputHints) {
       logger.info('Parsing input control hints', { type: options.inputHints.type });
       controlScheme = parseInputHints(options.inputHints);
@@ -106,7 +105,8 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
       options?.gameContext,
       options?.gameSpeed,
       effectiveConfig.maxExecutionTime,
-      options?.quickTest
+      options?.quickTest,
+      options?.reasoningEffort
     );
 
     try {
@@ -131,6 +131,7 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
         
         // Try to get the game state from the navigation module
         try {
+          const currentGameState = getCurrentGameState();
           // Generate a timeout report with whatever data we have
           return await generateTimeoutReport(
             gameUrl,
@@ -142,7 +143,9 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
             options?.pauseInterval,
             options?.gameContext,
             options?.gameSpeed,
-            options?.quickTest
+            options?.quickTest,
+            currentGameState,
+            options?.reasoningEffort
           );
         } catch (reportError) {
           logger.error('Failed to generate timeout report', reportError as Error);
@@ -156,15 +159,42 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
   } catch (error) {
     logger.error('QA test failed', error as Error);
 
-    // Generate error report
+    // Generate error report with actual collected state
     const cfg = getConfig();
-    return generateErrorReport(
-      gameUrl,
-      sessionDir || cfg.outputDir,
-      error as Error,
-      gameState,
-      startTime
-    );
+    try {
+      const currentGameState = getCurrentGameState();
+      return await generateErrorReport(
+        gameUrl,
+        sessionDir || cfg.outputDir,
+        error as Error,
+        currentGameState,
+        startTime,
+        controlScheme,
+        options?.model,
+        options?.pauseInterval,
+        options?.gameContext,
+        options?.gameSpeed,
+        options?.quickTest,
+        options?.reasoningEffort
+      );
+    } catch (reportError) {
+      logger.error('Failed to generate error report', reportError as Error);
+      // Fallback to minimal error report
+      return await generateErrorReport(
+        gameUrl,
+        sessionDir || cfg.outputDir,
+        error as Error,
+        null,
+        startTime,
+        null,
+        options?.model,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        options?.reasoningEffort
+      );
+    }
   } finally {
     // Cleanup
     try {
@@ -196,7 +226,8 @@ async function runTest(
   gameContext?: string,
   gameSpeed?: number,
   timeoutMs?: number,
-  quickTest?: boolean
+  quickTest?: boolean,
+  reasoningEffort?: 'low' | 'medium' | 'high'
 ): Promise<QAReport> {
   logger.info('Loading game', { url: gameUrl, hasControlScheme: !!controlScheme, pauseMode: !!pauseInterval, hasGameContext: !!gameContext, quickTest: !!quickTest });
 
@@ -209,7 +240,7 @@ async function runTest(
   const gameState = createGameState();
 
   // Navigate through the game (quickTest flag passed through to gameplay phase)
-  await navigateGame(sessionDir, gameState, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest);
+  await navigateGame(sessionDir, gameState, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest, reasoningEffort);
 
   logger.info('Navigation complete, collecting evidence');
 
@@ -249,8 +280,9 @@ async function runTest(
   // Generate issues
   const issues = generateIssues(evaluation, errorLogs);
 
-  // Calculate scores
-  const playabilityScore = calculatePlayabilityScore(evaluation, issues);
+  // Calculate scores with breakdown
+  const scoreBreakdown = calculatePlayabilityScoreWithBreakdown(evaluation, issues);
+  const playabilityScore = scoreBreakdown.final_score;
   const confidenceScore = calculateConfidenceScore(evaluation, errorLogs.length);
 
   // Determine status
@@ -269,11 +301,13 @@ async function runTest(
     viewport,
     llm_provider: config.llmProvider,
     llm_model: model || config.llmModel,
+    reasoning_effort: reasoningEffort,
     test_config: {
       pause_interval: pauseInterval,
       game_speed: gameSpeed,
       timeout_ms: timeoutMs,
       has_game_context: !!gameContext,
+      game_context: gameContext,
       has_input_hints: !!controlScheme,
       quick_test: !!quickTest,
     },
@@ -314,8 +348,11 @@ async function runTest(
     status,
     playability_score: playabilityScore,
     confidence_score: confidenceScore,
+    score_breakdown: scoreBreakdown,
     issues,
-    screenshots: gameState.screenshots.map((s) => s.path),
+    observations: evaluation.observations,
+    screenshots: gameState.screenshots.map((s) => s.path),  // Keep for backward compatibility
+    screenshot_metadata: gameState.screenshots,  // Full metadata including LLM actions
     logs: [joinPath(sessionDir, 'logs', 'console-logs.json')],
     metadata,
     gif: gifPath,
@@ -351,30 +388,39 @@ async function generateTimeoutReport(
   pauseInterval?: number,
   gameContext?: string,
   gameSpeed?: number,
-  quickTest?: boolean
+  quickTest?: boolean,
+  gameState?: GameState | null,
+  reasoningEffort?: 'low' | 'medium' | 'high'
 ): Promise<QAReport> {
   logger.info('Generating report for timed out test');
   
   const fs = await import('fs/promises');
   const path = await import('path');
   
-  // Collect all screenshots from the session directory
-  const screenshotDir = path.join(sessionDir, 'screenshots');
+  // Collect all screenshots - prefer gameState if available (has LLM metadata), otherwise read from disk
   let screenshots: Screenshot[] = [];
   
-  try {
-    const files = await fs.readdir(screenshotDir);
-    const screenshotFiles = files.filter(f => f.endsWith('.png')).sort();
-    
-    screenshots = screenshotFiles.map(f => ({
-      path: path.join(screenshotDir, f),
-      timestamp: new Date().toISOString(),
-      phase: 'gameplay' as const,
-    }));
-    
-    logger.info('Found screenshots from timed out test', { count: screenshots.length });
-  } catch (error) {
-    logger.warn('Could not read screenshots from session directory', { error });
+  if (gameState?.screenshots && gameState.screenshots.length > 0) {
+    // Use gameState screenshots which have LLM metadata
+    screenshots = gameState.screenshots;
+    logger.info('Using screenshots from gameState with LLM metadata', { count: screenshots.length });
+  } else {
+    // Fallback: read from disk (no LLM metadata available)
+    const screenshotDir = path.join(sessionDir, 'screenshots');
+    try {
+      const files = await fs.readdir(screenshotDir);
+      const screenshotFiles = files.filter(f => f.endsWith('.png')).sort();
+      
+      screenshots = screenshotFiles.map(f => ({
+        path: path.join(screenshotDir, f),
+        timestamp: new Date().toISOString(),
+        phase: 'gameplay' as const,
+      }));
+      
+      logger.info('Found screenshots from timed out test (no LLM metadata)', { count: screenshots.length });
+    } catch (error) {
+      logger.warn('Could not read screenshots from session directory', { error });
+    }
   }
   
   // Generate GIF if we have screenshots
@@ -400,13 +446,14 @@ async function generateTimeoutReport(
   // Run LLM evaluation if we have screenshots
   const cfg = getConfig();
   const duration = Date.now() - startTime;
+  const errorLogs = getErrorLogs();
   const evaluation = screenshots.length > 0
     ? await evaluatePlayability(
         gameUrl,
         screenshots,
-        [],  // No action history in timeout
-        [], // No error logs yet
-        ['gameplay'],  // Assume gameplay phase
+        gameState?.actionHistory || [],  // Use action history if available
+        errorLogs,
+        gameState?.phase ? [gameState.phase] : ['gameplay'],
         duration
       )
     : null;
@@ -420,11 +467,13 @@ async function generateTimeoutReport(
     viewport: { width: 1280, height: 720 },
     llm_provider: cfg?.llmProvider || 'unknown',
     llm_model: model || cfg?.llmModel || 'unknown',
+    reasoning_effort: reasoningEffort,
     test_config: {
       pause_interval: pauseInterval,
       game_speed: gameSpeed,
       timeout_ms: maxTime,
       has_game_context: !!gameContext,
+      game_context: gameContext,
       has_input_hints: !!controlScheme,
       quick_test: !!quickTest,
     },
@@ -459,17 +508,26 @@ async function generateTimeoutReport(
     });
   }
   
-  // Calculate playability score
-  const playabilityScore = evaluation
-    ? calculatePlayabilityScore(evaluation, issues)
-    : 0;
+  // Calculate playability score with breakdown
+  let playabilityScore = 0;
+  let confidenceScore = 0;
+  let scoreBreakdown;
+  if (evaluation) {
+    const errorLogs = await getErrorLogs();
+    scoreBreakdown = calculatePlayabilityScoreWithBreakdown(evaluation, issues);
+    playabilityScore = scoreBreakdown.final_score;
+    confidenceScore = calculateConfidenceScore(evaluation, errorLogs.length);
+  }
   
   const report: QAReport = {
     status: screenshots.length > 5 ? 'pass' : 'fail', // Pass if we got reasonable gameplay
     playability_score: playabilityScore,
-    confidence_score: evaluation?.confidence || 0,
+    confidence_score: confidenceScore,
+    score_breakdown: scoreBreakdown,
     issues,
+    observations: evaluation?.observations,
     screenshots: screenshots.map(s => s.path),
+    screenshot_metadata: screenshots,  // Include full metadata (may not have LLM data for timeout cases)
     gif: gifPath,
     logs: [path.join(sessionDir, 'logs', 'console-logs.json')],
     metadata,
@@ -490,41 +548,140 @@ async function generateTimeoutReport(
 /**
  * Generate an error report when test fails
  */
-function generateErrorReport(
+async function generateErrorReport(
   gameUrl: string,
-  _outputDir: string,
+  outputDir: string,
   error: Error,
   gameState: GameState | null,
-  startTime: number
-): QAReport {
+  startTime: number,
+  controlScheme: ControlScheme | null = null,
+  model?: string,
+  pauseInterval?: number,
+  gameContext?: string,
+  gameSpeed?: number,
+  quickTest?: boolean,
+  reasoningEffort?: 'low' | 'medium' | 'high'
+): Promise<QAReport> {
   logger.warn('Generating error report');
 
+  const fs = await import('fs/promises');
+  const path = await import('path');
+  const { getErrorLogs } = await import('./evidence/logs.js');
+  const { getTestDuration } = await import('./agent/navigation.js');
+  const { createGif, getOptimalDimensions } = await import('./evidence/gif.js');
+  const { generateIssues } = await import('./evaluation/scoring.js');
+
+  // Collect all screenshots - prefer gameState if available (has LLM metadata), otherwise read from disk
+  let screenshots: Screenshot[] = [];
+  
+  if (gameState?.screenshots && gameState.screenshots.length > 0) {
+    // Use gameState screenshots which have LLM metadata
+    screenshots = gameState.screenshots;
+    logger.info('Using screenshots from gameState with LLM metadata', { count: screenshots.length });
+  } else {
+    // Fallback: read from disk (no LLM metadata available, but at least we have the screenshots)
+    const screenshotDir = path.join(outputDir, 'screenshots');
+    try {
+      const files = await fs.readdir(screenshotDir);
+      const screenshotFiles = files.filter(f => f.endsWith('.png')).sort();
+      
+      screenshots = screenshotFiles.map(f => ({
+        path: path.join(screenshotDir, f),
+        timestamp: new Date().toISOString(),
+        phase: 'gameplay' as const,
+      }));
+      
+      logger.info('Found screenshots from disk (no LLM metadata)', { count: screenshots.length });
+    } catch (error) {
+      logger.warn('Could not read screenshots from session directory', { error });
+    }
+  }
+
+  // Generate GIF if we have screenshots
+  let gifPath: string | undefined;
+  if (screenshots.length >= 2) {
+    try {
+      const dimensions = await getOptimalDimensions(screenshots[0].path);
+      gifPath = getGifPath(outputDir);
+      await createGif(
+        screenshots,
+        gifPath,
+        {
+          width: dimensions.width,
+          height: dimensions.height,
+          delay: 500,
+        }
+      );
+      logger.info('Created GIF from error screenshots', { path: gifPath });
+    } catch (gifError) {
+      logger.warn('Failed to create GIF from error screenshots', { error: gifError });
+    }
+  }
+
+  // Get error logs
+  const errorLogs = getErrorLogs();
+  
+  // Calculate duration
+  const duration = gameState ? getTestDuration(gameState) : Date.now() - startTime;
+
+  // Generate issues from error logs
+  const issues = generateIssues(
+    {
+      loaded_successfully: screenshots.length > 0,
+      controls_responsive: false,
+      game_stable: false,
+      ui_visible: screenshots.length > 0,
+      confidence: 0,
+      observations: [`Test failed: ${formatError(error)}`],
+      issues: [],
+    },
+    errorLogs
+  );
+
+  // Add the main error as a critical issue
+  issues.unshift({
+    severity: 'critical',
+    description: formatError(error),
+    category: 'other',
+    timestamp: new Date().toISOString(),
+  });
+
+  const viewport = await getViewportSize();
   const metadata: TestMetadata = {
     game_url: gameUrl,
     timestamp: new Date().toISOString(),
-    duration_ms: Date.now() - startTime,
+    duration_ms: duration,
     browser: getBrowserInfo(),
-    viewport: { width: 1280, height: 720 },
+    viewport: viewport,
     llm_provider: getConfig()?.llmProvider || 'unknown',
-    llm_model: getConfig()?.llmModel || 'unknown',
+    llm_model: model || getConfig()?.llmModel || 'unknown',
+    reasoning_effort: reasoningEffort,
+    test_config: {
+      pause_interval: pauseInterval,
+      game_speed: gameSpeed,
+      has_game_context: !!gameContext,
+      game_context: gameContext,
+      has_input_hints: !!controlScheme,
+      quick_test: quickTest,
+    },
   };
 
   const report: QAReport = {
     status: 'error',
     playability_score: 0,
     confidence_score: 0,
-    issues: [
-      {
-        severity: 'critical',
-        description: formatError(error),
-        category: 'other',
-        timestamp: new Date().toISOString(),
-      },
-    ],
-    screenshots: gameState?.screenshots.map((s) => s.path) || [],
-    logs: [],
+    issues,
+    screenshots: screenshots.map((s) => s.path),
+    screenshot_metadata: screenshots,
+    logs: errorLogs.length > 0 ? [joinPath(outputDir, 'logs', 'console-logs.json')] : [],
     metadata,
+    gif: gifPath,
   };
+
+  // Save report to file
+  const reportPath = joinPath(outputDir, 'qa-report.json');
+  await saveJSON(reportPath, report);
+  logger.info('Error report saved', { path: reportPath });
 
   return report;
 }
