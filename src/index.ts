@@ -271,7 +271,8 @@ async function runTest(
       gameState.actionHistory,
       errorLogs,
       [gameState.phase],
-      duration
+      duration,
+      controlScheme
     );
   }
 
@@ -454,7 +455,8 @@ async function generateTimeoutReport(
         gameState?.actionHistory || [],  // Use action history if available
         errorLogs,
         gameState?.phase ? [gameState.phase] : ['gameplay'],
-        duration
+        duration,
+        controlScheme
       )
     : null;
   
@@ -519,8 +521,11 @@ async function generateTimeoutReport(
     confidenceScore = calculateConfidenceScore(evaluation, errorLogs.length);
   }
   
+  // Determine status based on score and issues (not just screenshot count)
+  const status = evaluation ? determineTestStatus(playabilityScore, issues) : 'fail';
+  
   const report: QAReport = {
-    status: screenshots.length > 5 ? 'pass' : 'fail', // Pass if we got reasonable gameplay
+    status,
     playability_score: playabilityScore,
     confidence_score: confidenceScore,
     score_breakdown: scoreBreakdown,

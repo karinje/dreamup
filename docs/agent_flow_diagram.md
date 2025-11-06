@@ -67,7 +67,7 @@ flowchart TD
     S4 -->|Continue| ModeDecision
     S4 -->|Exit| S5
     
-    S5["`🟡 **STAGE 5: EVALUATE**
+    S5["`🔵 **STAGE 5: EVALUATE**
     
     **Evidence Collection:**
     • All screenshots (8-50)
@@ -104,7 +104,7 @@ flowchart TD
     style S3Pause fill:#87CEEB,color:#000,stroke:#333,stroke-width:3px
     style S3Quick fill:#90EE90,color:#000,stroke:#333,stroke-width:3px
     style S4 fill:#90EE90,color:#000,stroke:#333,stroke-width:3px
-    style S5 fill:#FFD700,color:#000,stroke:#333,stroke-width:3px
+    style S5 fill:#87CEEB,color:#000,stroke:#333,stroke-width:3px
     style S6 fill:#E0E0E0,color:#000,stroke:#333,stroke-width:3px
     style ModeDecision fill:#DDA0DD,color:#000,stroke:#333,stroke-width:3px
     style Start fill:#667eea,color:#fff,stroke:#333,stroke-width:2px

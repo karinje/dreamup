@@ -127,7 +127,7 @@ function parseArgs(): {
     }
     // Set default timeout for quick test if not specified
     if (result.timeout === undefined) {
-      result.timeout = 30000; // 30 seconds default for quick test
+      result.timeout = 60000; // 60 seconds default for quick test
     }
   }
 
@@ -165,7 +165,7 @@ Options:
   --context <text>        Game-specific context for the AI (paddle position, objectives, etc.)
                           Example: "You control the RIGHT paddle. Move to intercept the ball."
   --quick-test            Fast functional test mode - press all hint keys without LLM
-                          (Default timeout: 30s. Cannot be used with --pause, --speed, --model)
+                          (Default timeout: 60s. Cannot be used with --pause, --speed, --model)
   --reasoning-effort <level>  Reasoning effort level for gpt-5 and o1 models
                           Options: low, medium, high (default: medium)
                           Example: --model gpt-5 --reasoning-effort high

@@ -246,13 +246,14 @@ export async function evaluatePlayability(
   actionHistory: string[],
   logs: LogEntry[],
   phases: string[],
-  duration: number
+  duration: number,
+  controlScheme?: ControlScheme | null
 ): Promise<LLMEvaluation> {
   logger.info('Running comprehensive playability evaluation');
 
   try {
     const model = getLLMModel();
-    const prompt = generatePlayabilityPrompt(gameUrl, duration, actionHistory, logs, phases as any[]);
+    const prompt = generatePlayabilityPrompt(gameUrl, duration, actionHistory, logs, phases as any[], controlScheme);
 
     // Select representative screenshots (max 5 to avoid token limits)
     const selectedScreenshots = selectRepresentativeScreenshots(screenshots, 5);

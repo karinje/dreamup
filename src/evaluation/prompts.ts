@@ -108,10 +108,65 @@ export function generatePlayabilityPrompt(
   duration: number,
   actionHistory: string[],
   logs: LogEntry[],
-  phases: GamePhase[]
+  phases: GamePhase[],
+  controlScheme?: any
 ): string {
   const errorCount = logs.filter((l) => l.level === 'error').length;
   const warningCount = logs.filter((l) => l.level === 'warn').length;
+
+  // Extract hint keys if control scheme provided
+  let hintKeysSection = '';
+  let testedKeysSection = '';
+  if (controlScheme && controlScheme.source === 'hints') {
+    const hintKeys: string[] = [];
+    if (controlScheme.actions) {
+      controlScheme.actions.forEach((action: any) => {
+        hintKeys.push(...action.keys);
+      });
+    }
+    if (controlScheme.axes) {
+      controlScheme.axes.forEach((axis: any) => {
+        hintKeys.push(...axis.keys);
+      });
+    }
+    const uniqueHintKeys = Array.from(new Set(hintKeys));
+    
+    if (uniqueHintKeys.length > 0) {
+      hintKeysSection = `\n⚠️ INPUT HINTS PROVIDED - Required Keys to Test:\n${uniqueHintKeys.map(k => `- ${k}`).join('\n')}\n`;
+      
+      // Check which hint keys were actually tested in actionHistory
+      const actionHistoryText = actionHistory.join(' ').toLowerCase();
+      const testedKeys: string[] = [];
+      const untestedKeys: string[] = [];
+      
+      uniqueHintKeys.forEach(key => {
+        // Check if key appears in action history (case-insensitive)
+        const keyVariations = [
+          key.toLowerCase(),
+          key.replace('Arrow', '').toLowerCase(), // "ArrowUp" -> "up"
+          key.replace('Arrow', 'Arrow ').toLowerCase(), // "ArrowUp" -> "arrow up"
+        ];
+        const wasTested = keyVariations.some(variation => 
+          actionHistoryText.includes(variation)
+        );
+        
+        if (wasTested) {
+          testedKeys.push(key);
+        } else {
+          untestedKeys.push(key);
+        }
+      });
+      
+      testedKeysSection = `\n📊 HINT KEY TESTING STATUS:\n`;
+      if (testedKeys.length > 0) {
+        testedKeysSection += `✅ Tested: ${testedKeys.join(', ')}\n`;
+      }
+      if (untestedKeys.length > 0) {
+        testedKeysSection += `❌ NOT TESTED: ${untestedKeys.join(', ')}\n`;
+      }
+      testedKeysSection += `\n⚠️ CRITICAL: For controls_responsive to be true, ALL hint keys must be tested AND controls must respond. If any hint keys were not tested, set controls_responsive to false.\n`;
+    }
+  }
 
   return `You are a QA expert evaluating the overall playability of a browser game.
 
@@ -121,7 +176,7 @@ Actions Performed: ${actionHistory.length}
 Console Errors: ${errorCount}
 Console Warnings: ${warningCount}
 Game Phases: ${phases.join(' → ')}
-
+${hintKeysSection}${testedKeysSection}
 Recent Actions:
 ${actionHistory.slice(-10).map((action, i) => `${i + 1}. ${action}`).join('\n')}
 
@@ -135,7 +190,7 @@ ${logs
 Based on the screenshots and logs, evaluate:
 1. Did the game load successfully?
 2. Is the game interface visible and properly rendered?
-3. Do controls respond to user input?
+3. Do controls respond to user input?${controlScheme && controlScheme.source === 'hints' ? ' (REQUIRED: All hint keys must be tested AND controls must respond)' : ''}
 4. Did the game remain stable without crashing?
 5. Is the game in a playable state?
 
