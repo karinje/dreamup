@@ -3,6 +3,7 @@
  */
 
 export { runQA } from './index.js';
+export { runBatchTests } from './batch.js';
 export type {
   QAReport,
   QAOptions,
@@ -11,6 +12,9 @@ export type {
   TestMetadata,
   InputHints,
   ControlScheme,
+  BatchTestConfig,
+  BatchTestReport,
+  BatchGameConfig,
 } from './types/index.js';
 
 /**

@@ -1,0 +1,44 @@
+{
+  "games": [
+    {
+      "url": "https://electroacoustic-lashawnda-unlunar.ngrok-free.dev/snake/",
+      "name": "Snake Game",
+      "pauseInterval": 0.35,
+      "timeout": 480000,
+      "model": "gpt-4o",
+      "quickTest": false,
+      "inputHints": {
+        "type": "semantic",
+        "content": "Use arrow keys to control the snake. Move towards the orange food to grow."
+      },
+      "gameContext": "Snake game: Use arrow keys to control the snake. Move towards the orange food to grow. Avoid hitting walls or your own tail. The goal is to get the snake as long as possible by going over the orange food squares as they appear. Arrow direction needs to be determined from user perspective not from the snakes perspective. The head of the snake is lighter in shade compared to the rest of the body."
+    },
+    {
+      "url": "https://electroacoustic-lashawnda-unlunar.ngrok-free.dev/pong/",
+      "name": "Pong Game",
+      "pauseInterval": 0.35,
+      "timeout": 480000,
+      "model": "gpt-4o",
+      "quickTest": false,
+      "inputHints": {
+        "type": "semantic",
+        "content": "Use ArrowUp to move paddle up and ArrowDown to move paddle down"
+      },
+      "gameContext": "Pong game: You control the right paddle. Use ArrowUp to move the paddle up and ArrowDown to move the paddle down. The goal is to hit the ball back to the left side and prevent it from getting past your paddle. Keep the ball in play by moving the paddle to intercept the ball's trajectory."
+    },
+    {
+      "url": "https://gabrielecirulli.github.io/2048/",
+      "name": "2048 Game",
+      "quickTest": true,
+      "timeout": 300000,
+      "inputHints": {
+        "type": "semantic",
+        "content": "Use arrow keys to move tiles"
+      }
+    }
+  ],
+  "maxParallel": 3,
+  "cooldownMs": 2000,
+  "verbose": false,
+  "outputDir": "output"
+}

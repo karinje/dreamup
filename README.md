@@ -114,9 +114,44 @@ const report = await runQA('https://your-game-url.com', {
 });
 ```
 
-#### Dashboard Viewer
+#### Batch Testing
 
-View test reports in a visual dashboard:
+Run multiple tests in parallel with all combinations of configurations:
+
+```bash
+# Create a batch config file (see examples/batch-config.example.json)
+npm run batch examples/batch-config.example.json
+
+# Or directly
+npx tsx src/batch-cli.ts examples/batch-config.example.json
+```
+
+**Example batch config:**
+```json
+{
+  "games": [
+    "https://game1.com",
+    { "url": "https://game2.com", "name": "Game 2" }
+  ],
+  "models": ["gpt-4o", "gpt-4o-mini"],
+  "pauseInterval": [0.5, 1.0],
+  "quickTest": true,
+  "maxParallel": 5
+}
+```
+
+This generates: **2 games × 2 models × 2 pause intervals × 1 quickTest = 8 total tests**, run in parallel batches of 5.
+
+**Batch features:**
+- ✅ Parallel execution (configurable, default: 5 browsers)
+- ✅ All combinations generated automatically
+- ✅ Consolidated batch report with summary statistics
+- ✅ Individual reports preserved and linked
+- ✅ Dashboard shows batch runs with drill-down to individual tests
+
+**See [docs/BATCH_TESTING.md](docs/BATCH_TESTING.md) for complete documentation.**
+
+#### Dashboard Viewer
 
 ```bash
 # Start the viewer

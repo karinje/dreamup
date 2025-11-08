@@ -152,6 +152,91 @@
             transition: all 0.3s ease;
         }
 
+        .batch-card {
+            background: rgba(139, 92, 246, 0.08);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(139, 92, 246, 0.25);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .batch-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(139, 92, 246, 0.25);
+        }
+
+        .batch-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.35);
+            color: #c4b5fd;
+        }
+
+        .batch-summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+            padding: 16px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 10px;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .batch-stat {
+            text-align: center;
+        }
+
+        .batch-stat-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #e2e8f0;
+            margin-bottom: 4px;
+        }
+
+        .batch-stat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+        }
+
+        .individual-runs-container {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(148, 163, 184, 0.15);
+        }
+
+        .individual-runs-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #cbd5e1;
+            margin-bottom: 16px;
+        }
+
+        .individual-run-label {
+            font-size: 11px;
+            color: #94a3b8;
+            font-family: 'Courier New', monospace;
+            letter-spacing: 0.5px;
+            background: rgba(148, 163, 184, 0.1);
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
         .report-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
@@ -295,7 +380,15 @@
         }
 
         .report-card.expanded .expand-icon {
-            transform: rotate(180deg);
+            transform: rotate(180deg) !important;
+        }
+
+        .batch-card.expanded .expand-icon {
+            transform: rotate(180deg) !important;
+        }
+
+        .individual-runs-container .report-card.expanded .expand-icon {
+            transform: rotate(180deg) !important;
         }
 
         .delete-btn {
@@ -347,6 +440,10 @@
         }
 
         .report-card.expanded .report-details {
+            max-height: 10000px;
+        }
+
+        .batch-card.expanded > .report-details {
             max-height: 10000px;
         }
 
@@ -839,6 +936,79 @@
             color: #a5b4fc;
             font-size: 13px;
         }
+
+        .batch-result-badges {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .batch-result-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            border: 1px solid transparent;
+        }
+
+        .batch-result-badge.inactive {
+            opacity: 0.45;
+            border-style: dashed;
+        }
+
+        .batch-result-badge.pass {
+            background: rgba(34, 197, 94, 0.12);
+            border-color: rgba(34, 197, 94, 0.35);
+            color: #86efac;
+        }
+
+        .batch-result-badge.fail {
+            background: rgba(248, 113, 113, 0.12);
+            border-color: rgba(248, 113, 113, 0.35);
+            color: #fca5a5;
+        }
+
+        .batch-result-badge.error {
+            background: rgba(250, 204, 21, 0.12);
+            border-color: rgba(250, 204, 21, 0.35);
+            color: #fcd34d;
+        }
+
+        .batch-summary-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 10px;
+        }
+
+        .batch-summary-right .score {
+            font-size: 28px;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .batch-summary-right .score span {
+            font-size: 16px;
+            color: #94a3b8;
+        }
+
+        .batch-card.expanded > .report-details
+
+        .individual-runs-container .report-card:not(.expanded) .report-details {
+            max-height: 0 !important;
+        }
+
+        .individual-runs-container .report-card.expanded .report-details {
+            max-height: 10000px !important;
+        }
     </style>
 </head>
 <body>
@@ -905,16 +1075,93 @@
     </div>
 
     <script>
-        let allReports = [];
-        let currentFilter = 'all';
-        let currentImageIndex = 0;
-        let currentImages = [];
+        const REPORT_CARD_PREFIX = 'report-card-';
+        const BATCH_CARD_PREFIX = 'batch-card-';
+        const BATCH_RUN_PREFIX = 'batch-run-';
 
-        // Load reports
+        let allReports = [];
+        let individualReports = [];
+        let batchReports = [];
+        let individualReportMap = new Map();
+        let currentFilter = 'all';
+        let currentImages = [];
+        let currentImageIndex = 0;
+        let expandedBatchId = null;
+
+        const expandedIndividualReports = new Set();
+        const expandedIndividualRuns = new Set();
+        const expandedSectionsByReport = new Map();
+        const reportIdByCardKey = new Map();
+        const batchRunLookup = new Map();
+
+        const sanitizeForId = (value) => String(value ?? '').replace(/[^a-zA-Z0-9_-]/g, '_');
+
+        const getReportTimestamp = (report) => {
+            if (!report) return 0;
+            if (report.type === 'batch') {
+                return new Date(report.timestamp || report.created_at || 0).getTime();
+            }
+            const metadata = report.metadata || {};
+            return new Date(metadata.timestamp || report.timestamp || 0).getTime();
+        };
+
+        const getReportById = (reportId) => {
+            if (!reportId) return null;
+            if (individualReportMap.has(reportId)) {
+                return individualReportMap.get(reportId);
+            }
+            return allReports.find((report) => report.id === reportId) || null;
+        };
+
+        const indexIndividualReports = (reports) => {
+            individualReportMap = new Map();
+            reports.forEach((report) => {
+                if (report && report.id) {
+                    individualReportMap.set(report.id, report);
+                }
+            });
+        };
+
+        const getFilteredReports = () => {
+            if (currentFilter === 'all') {
+                return allReports.slice();
+            }
+            return allReports.filter((report) => {
+                if (report.type === 'batch') return true;
+                return report.status === currentFilter;
+            });
+        };
+
         async function loadReports() {
             try {
                 const response = await fetch('/api/reports');
-                allReports = await response.json();
+                const data = await response.json();
+
+                if (Array.isArray(data)) {
+                    batchReports = data.filter((item) => item?.type === 'batch');
+                    individualReports = data.filter((item) => item?.type !== 'batch');
+                } else {
+                    batchReports = Array.isArray(data.batch) ? data.batch : [];
+                    individualReports = Array.isArray(data.individual) ? data.individual : [];
+                }
+
+                indexIndividualReports(individualReports);
+
+                const batchedIds = new Set();
+                batchReports.forEach((batch) => {
+                    if (Array.isArray(batch.results)) {
+                        batch.results.forEach((result) => {
+                            if (result?.reportId) {
+                                batchedIds.add(result.reportId);
+                            }
+                        });
+                    }
+                });
+
+                const standaloneIndividuals = individualReports.filter((report) => !batchedIds.has(report.id));
+
+                allReports = [...batchReports, ...standaloneIndividuals].sort((a, b) => getReportTimestamp(b) - getReportTimestamp(a));
+
                 updateStats();
                 renderReports();
             } catch (error) {
@@ -927,69 +1174,31 @@
             }
         }
 
-        // Update stats
         function updateStats() {
-            if (allReports.length === 0) {
+            if (individualReports.length === 0 && batchReports.length === 0) {
                 document.getElementById('stats-bar').style.display = 'none';
                 return;
             }
 
             document.getElementById('stats-bar').style.display = 'grid';
-            
-            const passed = allReports.filter(r => r.status === 'pass').length;
-            const failed = allReports.filter(r => r.status === 'fail').length;
-            const avgScore = Math.round(allReports.reduce((sum, r) => sum + r.playability_score, 0) / allReports.length);
 
-            document.getElementById('total-tests').textContent = allReports.length;
+            const passed = individualReports.filter((report) => report.status === 'pass').length;
+            const failed = individualReports.filter((report) => report.status === 'fail').length;
+            const avgScore = individualReports.length > 0
+                ? Math.round(individualReports.reduce((sum, report) => sum + (report.playability_score || 0), 0) / individualReports.length)
+                : 0;
+
+            document.getElementById('total-tests').textContent = individualReports.length + batchReports.length;
             document.getElementById('passed-tests').textContent = passed;
             document.getElementById('failed-tests').textContent = failed;
             document.getElementById('avg-score').textContent = avgScore;
         }
 
-        // Render reports
         function renderReports() {
             const container = document.getElementById('reports-container');
-            
-            // Track expanded state before re-rendering
-            const expandedReportIds = new Set();
-            const expandedSectionMap = new Map(); // Map reportId -> Set of section names
-            
-            // Get currently expanded reports by their report ID
-            container.querySelectorAll('.report-card.expanded').forEach(card => {
-                const idx = parseInt(card.id.replace('report-', ''));
-                const filtered = currentFilter === 'all' 
-                    ? allReports 
-                    : allReports.filter(r => r.status === currentFilter);
-                if (filtered[idx]) {
-                    expandedReportIds.add(filtered[idx].id);
-                }
-            });
-            
-            // Get currently expanded sections by report ID
-            container.querySelectorAll('.collapsible-section.expanded').forEach(section => {
-                const sectionId = section.id;
-                // Extract report index from section ID (e.g., "issues-0" -> idx=0)
-                const match = sectionId.match(/^(.+)-(\d+)$/);
-                if (match) {
-                    const sectionName = match[1];
-                    const idx = parseInt(match[2]);
-                    const filtered = currentFilter === 'all' 
-                        ? allReports 
-                        : allReports.filter(r => r.status === currentFilter);
-                    if (filtered[idx]) {
-                        const reportId = filtered[idx].id;
-                        if (!expandedSectionMap.has(reportId)) {
-                            expandedSectionMap.set(reportId, new Set());
-                        }
-                        expandedSectionMap.get(reportId).add(sectionName);
-                    }
-                }
-            });
-            
-            const filtered = currentFilter === 'all' 
-                ? allReports 
-                : allReports.filter(r => r.status === currentFilter);
+            if (!container) return;
 
+            const filtered = getFilteredReports();
             if (filtered.length === 0) {
                 container.innerHTML = `
                     <div class="empty">
@@ -1000,73 +1209,98 @@
                 return;
             }
 
-            container.innerHTML = filtered.map((report, idx) => `
-                <div class="report-card" id="report-${idx}">
-                    <div class="report-summary" onclick="toggleReport(${idx})">
+            reportIdByCardKey.clear();
+            batchRunLookup.clear();
+
+            container.innerHTML = filtered.map((report, idx) => {
+                if (report.type === 'batch') {
+                    return renderBatchReport(report, idx);
+                }
+                return renderIndividualReport(report, idx);
+            }).join('');
+
+            filtered.forEach((report, idx) => {
+                if (report.type === 'batch' && report.id === expandedBatchId) {
+                    toggleBatchReport(report.id, idx, true);
+                }
+            });
+        }
+
+        function renderIndividualReport(report, idx) {
+            const metadata = report.metadata || {};
+            const testConfig = metadata.test_config || {};
+            const cardKey = sanitizeForId(report.id || idx);
+            const cardId = `${REPORT_CARD_PREFIX}${cardKey}`;
+            const isExpanded = expandedIndividualReports.has(report.id);
+            const screenshotCount = Array.isArray(report.screenshots) ? report.screenshots.length : 0;
+
+            reportIdByCardKey.set(cardKey, report.id);
+
+            return `
+                <div class="report-card ${isExpanded ? 'expanded' : ''}" id="${cardId}" data-report-id="${report.id}" data-card-key="${cardKey}">
+                    <div class="report-summary" onclick="toggleIndividualReport('${report.id}', '${cardKey}')">
                         <div class="report-summary-left">
-                            <button class="delete-btn" onclick="deleteReport('${report.id}', ${idx}, event)" title="Delete report">
+                            <button class="delete-btn" onclick="deleteReport('${report.id}', 'individual', event)" title="Delete report">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6"/>
                                 </svg>
                             </button>
                             <div class="report-info">
-                                <div class="report-url">${report.metadata.game_url}</div>
+                                <div class="report-url">${metadata.game_url || report.gameUrl || 'Unknown'}</div>
                                 <div class="report-meta-line">
                                     <span>
                                         <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
-                                        ${new Date(report.metadata.timestamp).toLocaleString()}
+                                        ${new Date(metadata.timestamp || report.timestamp || Date.now()).toLocaleString()}
                                     </span>
                                     <span>
                                         <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/></svg></span>
-                                        ${(report.metadata.duration_ms / 1000).toFixed(1)}s
+                                        ${((metadata.duration_ms || report.duration_ms || 0) / 1000).toFixed(1)}s
                                     </span>
                                     <span>
                                         <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
-                                        ${report.screenshots.length} screenshots
+                                        ${screenshotCount} screenshots
                                     </span>
                                 </div>
                                 <div class="report-meta-line-secondary">
                                     <span class="meta-badge meta-badge-model">
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                                        ${report.metadata.llm_model || 'N/A'}${report.metadata.reasoning_effort ? ` · ${report.metadata.reasoning_effort}` : ''}
+                                        ${metadata.llm_model || 'N/A'}${metadata.reasoning_effort ? ` · ${metadata.reasoning_effort}` : ''}
                                     </span>
-                                    ${report.metadata.test_config ? `
-                                        ${report.metadata.test_config.timeout_ms ? `
-                                            <span class="meta-badge">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/></svg>
-                                                ${(report.metadata.test_config.timeout_ms / 60000).toFixed(1)} min
-                                            </span>
-                                        ` : ''}
-                                        ${report.metadata.test_config.pause_interval ? `
-                                            <span class="meta-badge">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                                                ${report.metadata.test_config.pause_interval}s
-                                            </span>
-                                        ` : ''}
-                                        ${report.metadata.test_config.game_speed ? `
-                                            <span class="meta-badge">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                                ${report.metadata.test_config.game_speed}%
-                                            </span>
-                                        ` : ''}
-                                        ${report.metadata.test_config.quick_test ? `
-                                            <span class="meta-badge">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                                                Quick Test
-                                            </span>
-                                        ` : ''}
-                                        ${report.metadata.test_config.has_input_hints ? `
-                                            <span class="meta-badge">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01"/></svg>
-                                                Input Hints
-                                            </span>
-                                        ` : ''}
-                                        ${report.metadata.test_config.has_game_context ? `
-                                            <span class="meta-badge meta-badge-context">
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-                                                Context
-                                            </span>
-                                        ` : ''}
+                                    ${testConfig.timeout_ms ? `
+                                        <span class="meta-badge">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/></svg>
+                                            ${(testConfig.timeout_ms / 60000).toFixed(1)} min
+                                        </span>
+                                    ` : ''}
+                                    ${testConfig.pause_interval ? `
+                                        <span class="meta-badge">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                            ${testConfig.pause_interval}s
+                                        </span>
+                                    ` : ''}
+                                    ${testConfig.game_speed ? `
+                                        <span class="meta-badge">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                            ${testConfig.game_speed}%
+                                        </span>
+                                    ` : ''}
+                                    ${testConfig.quick_test ? `
+                                        <span class="meta-badge">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                                            Quick Test
+                                        </span>
+                                    ` : ''}
+                                    ${testConfig.has_input_hints ? `
+                                        <span class="meta-badge">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01"/></svg>
+                                            Input Hints
+                                        </span>
+                                    ` : ''}
+                                    ${testConfig.has_game_context ? `
+                                        <span class="meta-badge meta-badge-context">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+                                            Context
+                                        </span>
                                     ` : ''}
                                 </div>
                             </div>
@@ -1079,323 +1313,734 @@
                             <div class="expand-icon">▼</div>
                         </div>
                     </div>
-
                     <div class="report-details">
-                        <div class="report-content">
-                            <!-- Meta Information -->
-                            <div class="meta-grid">
-                                <div class="meta-item">
-                                    <div class="meta-label">Confidence</div>
-                                    <div class="meta-value">${report.confidence_score}%</div>
+                        ${renderReportDetails(report, cardKey)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderBatchReport(batch, idx) {
+            const config = batch.config || {};
+            const summary = batch.summary || {};
+            const batchKey = sanitizeForId(batch.id || idx);
+            const cardId = `${BATCH_CARD_PREFIX}${batchKey}`;
+            const testsTotal = summary.total ?? (Array.isArray(batch.results) ? batch.results.length : 0);
+            const gamesCount = Array.isArray(config.games) ? config.games.length : 0;
+            const maxParallel = config.maxParallel ?? config.max_parallel ?? config.parallel ?? 1;
+            const isExpanded = expandedBatchId === batch.id;
+            const passCount = summary.passed ?? 0;
+            const failCount = summary.failed ?? 0;
+            const errorCount = summary.errors ?? 0;
+            const passBadgeClass = `batch-result-badge pass${passCount === 0 ? ' inactive' : ''}`;
+            const failBadgeClass = `batch-result-badge fail${failCount === 0 ? ' inactive' : ''}`;
+            const errorBadgeClass = `batch-result-badge error${errorCount === 0 ? ' inactive' : ''}`;
+
+            return `
+                <div class="batch-card ${isExpanded ? 'expanded' : ''}" id="${cardId}" data-batch-id="${batch.id}" data-card-key="${batchKey}">
+                    <div class="report-summary" onclick="toggleBatchReport('${batch.id}', ${idx})">
+                        <div class="report-summary-left">
+                            <button class="delete-btn" onclick="deleteReport('${batch.id}', 'batch', event)" title="Delete batch report">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14zM10 11v6M14 11v6"/>
+                                </svg>
+                            </button>
+                            <div class="report-info">
+                                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                    <span class="batch-badge">📦 Batch Test</span>
+                                    <div class="report-url" style="margin: 0;">${gamesCount} game${gamesCount === 1 ? '' : 's'} · ${testsTotal} run${testsTotal === 1 ? '' : 's'}</div>
                                 </div>
-                                <div class="meta-item">
-                                    <div class="meta-label">Issues Found</div>
-                                    <div class="meta-value">${report.issues.length}</div>
+                                <div class="report-meta-line">
+                                    <span>
+                                        <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+                                        ${new Date(batch.timestamp || batch.created_at || Date.now()).toLocaleString()}
+                                    </span>
+                                    <span>
+                                        <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/></svg></span>
+                                        ${((batch.duration_ms || 0) / 1000).toFixed(1)}s
+                                    </span>
+                                    <span>
+                                        <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+                                        ${maxParallel} parallel
+                                    </span>
                                 </div>
-                                <div class="meta-item">
-                                    <div class="meta-label">Browser</div>
-                                    <div class="meta-value" style="font-size: 12px;">${report.metadata.browser}</div>
-                                </div>
-                                <div class="meta-item">
-                                    <div class="meta-label">LLM Model</div>
-                                    <div class="meta-value" style="font-size: 12px;">${report.metadata.llm_model}${report.metadata.reasoning_effort ? ` · ${report.metadata.reasoning_effort}` : ''}</div>
+                                <div class="report-meta-line-secondary">
+                                    ${Array.isArray(config.models) && config.models.length ? `
+                                        <span class="meta-badge">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                            ${config.models.length} model${config.models.length === 1 ? '' : 's'}
+                                        </span>
+                                    ` : ''}
                                 </div>
                             </div>
-
-                            ${report.score_breakdown ? `
-                                <div class="collapsible-section" id="score-${idx}">
-                                    <div class="section-header" onclick="toggleSection('score-${idx}')">
-                                        <div class="section-title">
-                                            <span>Score Breakdown</span>
-                                        </div>
-                                        <div class="section-toggle">▼</div>
-                                    </div>
-                                    <div class="section-content">
-                                        <div class="section-body">
-                                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                                <!-- Base Components -->
-                                                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
-                                                    <div style="font-size: 9px; color: #6ee7b7; margin-bottom: 2px;">Load</div>
-                                                    <div style="font-size: 16px; font-weight: 700; color: #10b981;">${Math.round(report.score_breakdown.base_scores.load_success)}</div>
-                                                </div>
-                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
-                                                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
-                                                    <div style="font-size: 9px; color: #93c5fd; margin-bottom: 2px;">Controls</div>
-                                                    <div style="font-size: 16px; font-weight: 700; color: #3b82f6;">${Math.round(report.score_breakdown.base_scores.controls)}</div>
-                                                </div>
-                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
-                                                <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
-                                                    <div style="font-size: 9px; color: #c4b5fd; margin-bottom: 2px;">Stability</div>
-                                                    <div style="font-size: 16px; font-weight: 700; color: #8b5cf6;">${Math.round(report.score_breakdown.base_scores.stability)}</div>
-                                                </div>
-                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
-                                                <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
-                                                    <div style="font-size: 9px; color: #fbbf24; margin-bottom: 2px;">UI</div>
-                                                    <div style="font-size: 16px; font-weight: 700; color: #f59e0b;">${Math.round(report.score_breakdown.base_scores.ui_visibility)}</div>
-                                                </div>
-                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
-                                                <div style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
-                                                    <div style="font-size: 9px; color: #94a3b8; margin-bottom: 2px;">Base</div>
-                                                    <div style="font-size: 16px; font-weight: 700; color: #60a5fa;">${report.score_breakdown.total_base}</div>
-                                                </div>
-                                                ${report.score_breakdown.issue_penalties.total > 0 ? `
-                                                    <div style="font-size: 16px; color: #64748b; font-weight: 600;">−</div>
-                                                    <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
-                                                        <div style="font-size: 9px; color: #fca5a5; margin-bottom: 2px;">Penalties</div>
-                                                        <div style="font-size: 16px; font-weight: 700; color: #ef4444;">${report.score_breakdown.issue_penalties.total}</div>
-                                                    </div>
-                                                    <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
-                                                    <div style="background: rgba(102, 126, 234, 0.12); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
-                                                        <div style="font-size: 9px; color: #94a3b8; margin-bottom: 2px;">After</div>
-                                                        <div style="font-size: 16px; font-weight: 700; color: #60a5fa;">${report.score_breakdown.after_penalties}</div>
-                                                    </div>
-                                                ` : ''}
-                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">×</div>
-                                                <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 80px; text-align: center;">
-                                                    <div style="font-size: 9px; color: #c4b5fd; margin-bottom: 2px;">Confidence</div>
-                                                    <div style="font-size: 16px; font-weight: 700; color: #a78bfa;">${report.score_breakdown.confidence_factor}%</div>
-                                                </div>
-                                                <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
-                                                <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
-                                                    <div style="font-size: 9px; color: #cbd5e1; margin-bottom: 2px;">Final</div>
-                                                    <div style="font-size: 18px; font-weight: 700; color: #818cf8;">${report.score_breakdown.final_score}</div>
-                                                </div>
-                                            </div>
-                                            ${report.score_breakdown.issue_penalties.total > 0 ? `
-                                                <div style="background: rgba(0, 0, 0, 0.2); border-radius: 4px; padding: 6px 8px; font-size: 10px; color: #94a3b8; margin-top: 8px;">
-                                                    <strong>Penalties:</strong> 
-                                                    ${report.score_breakdown.issue_penalties.critical > 0 ? `Critical: -${report.score_breakdown.issue_penalties.critical} ` : ''}
-                                                    ${report.score_breakdown.issue_penalties.high > 0 ? `High: -${report.score_breakdown.issue_penalties.high} ` : ''}
-                                                    ${report.score_breakdown.issue_penalties.medium > 0 ? `Medium: -${report.score_breakdown.issue_penalties.medium} ` : ''}
-                                                    ${report.score_breakdown.issue_penalties.low > 0 ? `Low: -${report.score_breakdown.issue_penalties.low}` : ''}
-                                                </div>
-                                            ` : ''}
-                                        </div>
-                                    </div>
+                        </div>
+                        <div class="report-summary-right">
+                            <div class="batch-summary-right">
+                                <div class="batch-result-badges">
+                                    <span class="${passBadgeClass}">${passCount} pass</span>
+                                    <span class="${failBadgeClass}">${failCount} fail</span>
+                                    <span class="${errorBadgeClass}">${errorCount} error</span>
                                 </div>
-                            ` : ''}
-
-                            ${report.metadata.test_config?.game_context ? `
-                                <div class="config-section">
-                                    <div class="config-title">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: currentColor; fill: none;">
-                                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                                            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
-                                        </svg>
-                                        Game Context Details
-                                    </div>
-                                    <div class="config-context-section" style="margin-top: 12px; padding-top: 0; border-top: none;">
-                                        <div class="config-context-text">${report.metadata.test_config.game_context}</div>
-                                    </div>
+                                <div class="score">${summary.avg_playability_score ?? '—'}<span style="font-size: 16px; color: #94a3b8;">/100</span></div>
+                            </div>
+                            <div class="expand-icon">▼</div>
+                        </div>
+                    </div>
+                    <div class="report-details">
+                        <div class="report-content">
+                            <div class="batch-summary-stats">
+                                <div class="batch-stat">
+                                    <div class="batch-stat-value">${summary.total ?? testsTotal}</div>
+                                    <div class="batch-stat-label">Total Tests</div>
                                 </div>
-                            ` : ''}
-
-                            ${report.issues.length > 0 ? `
-                                <div class="collapsible-section" id="issues-${idx}">
-                                    <div class="section-header" onclick="toggleSection('issues-${idx}')">
-                                        <div class="section-title">
-                                            <span>Issues</span>
-                                            <span class="section-count">${report.issues.length}</span>
-                                        </div>
-                                        <div class="section-toggle">▼</div>
-                                    </div>
-                                    <div class="section-content">
-                                        <div class="section-body">
-                                            ${report.issues.map(issue => `
-                                                <div class="issue ${issue.severity}">
-                                                    <div class="issue-icon">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
-                                                            <circle cx="12" cy="12" r="10" fill="${issue.severity === 'critical' ? '#ef4444' : issue.severity === 'high' ? '#f59e0b' : issue.severity === 'medium' ? '#eab308' : '#10b981'}" stroke="none"/>
-                                                            <path d="M12 8v4M12 16h.01" stroke="white" stroke-width="2"/>
-                                                        </svg>
-                                                    </div>
-                                                    <div class="issue-content">
-                                                        <div class="issue-header">${issue.severity} - ${issue.category}</div>
-                                                        <div class="issue-text">${issue.description}</div>
-                                                    </div>
-                                                </div>
-                                            `).join('')}
-                                        </div>
-                                    </div>
+                                <div class="batch-stat">
+                                    <div class="batch-stat-value" style="color: #10b981;">${summary.passed ?? 0}</div>
+                                    <div class="batch-stat-label">Passed</div>
                                 </div>
-                            ` : ''}
-
-                            ${report.observations && report.observations.length > 0 ? `
-                                <div class="collapsible-section" id="observations-${idx}">
-                                    <div class="section-header" onclick="toggleSection('observations-${idx}')">
-                                        <div class="section-title">
-                                            <span>LLM Observations</span>
-                                            <span class="section-count">${report.observations.length}</span>
-                                        </div>
-                                        <div class="section-toggle">▼</div>
-                                    </div>
-                                    <div class="section-content">
-                                        <div class="section-body">
-                                            <div class="observations-list">
-                                                ${report.observations.map((obs, obsIdx) => `
-                                                    <div class="observation-item">
-                                                        <div class="observation-bullet">•</div>
-                                                        <div class="observation-text">${obs}</div>
-                                                    </div>
-                                                `).join('')}
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div class="batch-stat">
+                                    <div class="batch-stat-value" style="color: #f59e0b;">${summary.failed ?? 0}</div>
+                                    <div class="batch-stat-label">Failed</div>
                                 </div>
-                            ` : ''}
-
-                            ${report.gif ? `
-                                <div class="collapsible-section" id="gif-${idx}">
-                                    <div class="section-header" onclick="toggleSection('gif-${idx}')">
-                                        <div class="section-title">
-                                            <span>Gameplay Recording</span>
-                                        </div>
-                                        <div class="section-toggle">▼</div>
-                                    </div>
-                                    <div class="section-content">
-                                        <div class="section-body">
-                                            <div class="gif-container">
-                                                <img src="/${report.gif}" alt="Gameplay GIF">
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div class="batch-stat">
+                                    <div class="batch-stat-value" style="color: #ef4444;">${summary.errors ?? 0}</div>
+                                    <div class="batch-stat-label">Errors</div>
                                 </div>
-                            ` : ''}
-
-                            ${report.screenshots.length > 0 ? `
-                                <div class="collapsible-section" id="screenshots-${idx}">
-                                    <div class="section-header" onclick="toggleSection('screenshots-${idx}')">
-                                        <div class="section-title">
-                                            <span>Screenshots</span>
-                                            <span class="section-count">${report.screenshots.length}</span>
-                                        </div>
-                                        <div class="section-toggle">▼</div>
-                                    </div>
-                                    <div class="section-content">
-                                        <div class="section-body">
-                                            <div class="screenshots-grid">
-                                                ${(report.screenshot_metadata || report.screenshots.map(path => ({ path }))).map((screenshot, imgIdx) => {
-                                                    const path = typeof screenshot === 'string' ? screenshot : screenshot.path;
-                                                    const metadata = typeof screenshot === 'object' ? screenshot : null;
-                                                    return `
-                                                    <div class="screenshot-item-wrapper">
-                                                        <div class="screenshot-item" onclick="openScreenshot(${idx}, ${imgIdx})">
-                                                            <img src="/${path}" alt="Screenshot ${imgIdx + 1}" loading="lazy">
-                                                        </div>
-                                                        ${metadata && (metadata.llm_action || metadata.llm_reasoning) ? `
-                                                            <div class="screenshot-llm-info">
-                                                                ${metadata.llm_action ? `
-                                                                    <div class="screenshot-action">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: #818cf8; flex-shrink: 0;">
-                                                                            <rect x="2" y="4" width="20" height="16" rx="2"/>
-                                                                            <path d="M6 8h.01M10 8h.01M14 8h.01"/>
-                                                                        </svg>
-                                                                        <span class="action-keys">${metadata.llm_action}</span>
-                                                                    </div>
-                                                                ` : ''}
-                                                                ${metadata.llm_reasoning ? `
-                                                                    <div class="screenshot-reasoning">
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: #94a3b8; flex-shrink: 0; margin-top: 2px;">
-                                                                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                                                                        </svg>
-                                                                        <span class="reasoning-text">${metadata.llm_reasoning}</span>
-                                                                    </div>
-                                                                ` : ''}
-                                                            </div>
-                                                        ` : ''}
-                                                    </div>
-                                                `;
-                                                }).join('')}
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div class="batch-stat">
+                                    <div class="batch-stat-value">${summary.avg_playability_score ?? '—'}</div>
+                                    <div class="batch-stat-label">Avg Score</div>
                                 </div>
-                            ` : ''}
+                                <div class="batch-stat">
+                                    <div class="batch-stat-value">${summary.avg_confidence_score != null ? `${summary.avg_confidence_score}%` : '—'}</div>
+                                    <div class="batch-stat-label">Avg Confidence</div>
+                                </div>
+                            </div>
+                            <div class="individual-runs-container">
+                                <div class="individual-runs-header">
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 16px; height: 16px; stroke: #cbd5e1;">
+                                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
+                                    </svg>
+                                    Individual Test Runs (${testsTotal})
+                                </div>
+                                <div id="batch-runs-${batchKey}" data-batch-id="${batch.id}">
+                                    ${isExpanded ? '<div style="text-align: center; padding: 20px; color: #94a3b8;">Loading individual runs...</div>' : '<div style="text-align: center; padding: 20px; color: #94a3b8;">Expand to load individual runs</div>'}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            `).join('');
-            
-            // Restore expanded state after rendering
-            filtered.forEach((report, idx) => {
-                if (expandedReportIds.has(report.id)) {
-                    const card = document.getElementById(`report-${idx}`);
-                    if (card) {
-                        card.classList.add('expanded');
+            `;
+        }
+
+        async function loadBatchDetails(batchId) {
+            const response = await fetch(`/api/batch/${batchId}`);
+            if (!response.ok) {
+                throw new Error(`Failed to load batch details (${response.status})`);
+            }
+            return response.json();
+        }
+
+        function updateExpandIcon(icon, isExpanded) {
+            if (!icon) return;
+            icon.textContent = isExpanded ? '▲' : '▼';
+            icon.style.transform = isExpanded ? 'rotate(180deg)' : '';
+        }
+
+        function toggleIndividualReport(reportId, cardKey) {
+            const card = document.getElementById(`${REPORT_CARD_PREFIX}${cardKey}`);
+            if (!card) return;
+            const isExpanded = card.classList.toggle('expanded');
+            const icon = card.querySelector('.expand-icon');
+            updateExpandIcon(icon, isExpanded);
+            if (isExpanded) {
+                expandedIndividualReports.add(reportId);
+            } else {
+                expandedIndividualReports.delete(reportId);
+                expandedSectionsByReport.delete(reportId);
+            }
+        }
+
+        function toggleBatchRun(runKey) {
+            const card = document.getElementById(`${BATCH_RUN_PREFIX}${runKey}`);
+            if (!card) return;
+            const info = batchRunLookup.get(runKey);
+            const isExpanded = card.classList.toggle('expanded');
+            const icon = card.querySelector('.expand-icon');
+            updateExpandIcon(icon, isExpanded);
+            if (isExpanded) {
+                expandedIndividualRuns.add(runKey);
+            } else {
+                expandedIndividualRuns.delete(runKey);
+                if (info?.report?.id) {
+                    expandedSectionsByReport.delete(info.report.id);
+                }
+            }
+        }
+
+        async function toggleBatchReport(batchId, idx, keepOpen = false) {
+            const filtered = getFilteredReports();
+            const batch = filtered[idx];
+            if (!batch || batch.type !== 'batch') return;
+
+            const batchKey = sanitizeForId(batch.id || idx);
+            const card = document.getElementById(`${BATCH_CARD_PREFIX}${batchKey}`);
+            if (!card) return;
+
+            const runsContainer = document.getElementById(`batch-runs-${batchKey}`);
+            const icon = card.querySelector('.expand-icon');
+            const isExpanded = card.classList.contains('expanded');
+
+            if (isExpanded && !keepOpen) {
+                card.classList.remove('expanded');
+                updateExpandIcon(icon, false);
+                expandedBatchId = null;
+                if (runsContainer) {
+                    runsContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #94a3b8;">Expand to load individual runs</div>';
+                }
+                Array.from(batchRunLookup.entries()).forEach(([key, info]) => {
+                    if (info?.batchId === batch.id) {
+                        batchRunLookup.delete(key);
+                        expandedIndividualRuns.delete(key);
                     }
-                }
-                
-                // Restore expanded sections for this report
-                if (expandedSectionMap.has(report.id)) {
-                    const expandedSections = expandedSectionMap.get(report.id);
-                    expandedSections.forEach(sectionName => {
-                        const section = document.getElementById(`${sectionName}-${idx}`);
-                        if (section) {
-                            section.classList.add('expanded');
-                        }
-                    });
-                }
-            });
-        }
-
-        // Toggle report expand/collapse
-        function toggleReport(idx) {
-            const card = document.getElementById(`report-${idx}`);
-            card.classList.toggle('expanded');
-        }
-
-        // Toggle section expand/collapse
-        function toggleSection(id) {
-            event.stopPropagation();
-            const section = document.getElementById(id);
-            section.classList.toggle('expanded');
-        }
-
-        // Delete report
-        async function deleteReport(reportId, idx, event) {
-            event.stopPropagation(); // Prevent card expansion
-
-            if (!confirm('Are you sure you want to delete this test report? This action cannot be undone.')) {
+                });
                 return;
             }
 
+            card.classList.add('expanded');
+            updateExpandIcon(icon, true);
+            expandedBatchId = batch.id;
+
+            if (runsContainer) {
+                runsContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #94a3b8;">Loading individual runs...</div>';
+            }
+
             try {
-                const response = await fetch(`/api/reports/${reportId}`, {
-                    method: 'DELETE',
-                });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to delete report');
-                }
-
-                // Remove from UI with animation
-                const card = document.getElementById(`report-${idx}`);
-                card.style.opacity = '0';
-                card.style.transform = 'scale(0.95)';
-                
-                setTimeout(() => {
-                    // Remove from array and re-render
-                    allReports = allReports.filter(r => r.id !== reportId);
-                    updateStats();
-                    renderReports();
-                }, 300);
-
+                const batchData = await loadBatchDetails(batch.id);
+                const resolvedBatch = batchData?.batch || batch;
+                const individualList = batchData?.individualReports || [];
+                const results = resolvedBatch.results || batch.results || [];
+                renderIndividualRuns(resolvedBatch, batchKey, individualList, results);
             } catch (error) {
-                alert('Failed to delete report: ' + error.message);
+                if (runsContainer) {
+                    runsContainer.innerHTML = `<div style="text-align: center; padding: 20px; color: #ef4444;">${error.message}</div>`;
+                }
             }
         }
 
-        // Filter dropdown
-        document.getElementById('filter-select').addEventListener('change', (e) => {
-            currentFilter = e.target.value;
-            renderReports();
-        });
+        function renderIndividualRuns(batch, batchKey, individualList, results) {
+            const container = document.getElementById(`batch-runs-${batchKey}`);
+            if (!container) return;
 
-        // Screenshot modal with navigation
-        function openScreenshot(reportIdx, imgIdx) {
-            const report = (currentFilter === 'all' ? allReports : allReports.filter(r => r.status === currentFilter))[reportIdx];
-            currentImages = report.screenshots.map(path => `/${path}`);
+            // Reset any lingering expanded state for this batch before rendering
+            Array.from(expandedIndividualRuns).forEach((key) => {
+                const info = batchRunLookup.get(key);
+                if (!info || info.batchId === batch.id) {
+                    expandedIndividualRuns.delete(key);
+                }
+            });
+
+            const reportMap = new Map();
+            (individualList || []).forEach((report) => {
+                if (report && report.id) {
+                    reportMap.set(report.id, report);
+                }
+            });
+
+            const runKeys = new Set();
+            const presentReportIds = new Set();
+
+            const html = (results || []).map((result, runIdx) => {
+                const runKey = sanitizeForId(`${batch.id || batchKey}-${runIdx}`);
+                runKeys.add(runKey);
+
+                const rawReport = result.reportId ? (reportMap.get(result.reportId) || individualReportMap.get(result.reportId)) : result.report;
+                const report = rawReport || null;
+                const gameUrl = result.gameUrl || result.game_url || report?.metadata?.game_url || batch.gameUrl || 'Unknown';
+                const isExpanded = expandedIndividualRuns.has(runKey);
+
+                batchRunLookup.set(runKey, { batchId: batch.id, runIdx, result, report });
+                if (report && report.id) {
+                    reportIdByCardKey.set(runKey, report.id);
+                    presentReportIds.add(report.id);
+                }
+
+                return renderFullReportCard(report, runKey, isExpanded, gameUrl, result.label);
+            }).join('');
+
+            expandedIndividualRuns.forEach((key) => {
+                if (!runKeys.has(key)) {
+                    expandedIndividualRuns.delete(key);
+                }
+            });
+
+            expandedSectionsByReport.forEach((_, reportId) => {
+                if (!presentReportIds.has(reportId) && !individualReportMap.has(reportId)) {
+                    expandedSectionsByReport.delete(reportId);
+                }
+            });
+
+            batchRunLookup.forEach((info, key) => {
+                if (info?.batchId === batch.id && !runKeys.has(key)) {
+                    batchRunLookup.delete(key);
+                }
+            });
+
+            container.innerHTML = html || '<div style="text-align: center; padding: 20px; color: #94a3b8;">No runs recorded</div>';
+        }
+
+        function renderFullReportCard(report, cardKey, isExpanded, gameUrl, label) {
+            if (!report) {
+                return `
+                    <div class="report-card ${isExpanded ? 'expanded' : ''}" id="${BATCH_RUN_PREFIX}${cardKey}" data-card-key="${cardKey}">
+                        <div class="report-summary" onclick="toggleBatchRun('${cardKey}')">
+                            <div class="report-summary-left">
+                                <div class="report-info">
+                                    <div class="report-url">${gameUrl}</div>
+                                    <div class="report-meta-line">
+                                        <span class="individual-run-label">${label || 'default'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="report-summary-right">
+                                <div class="status-badge status-error">Error</div>
+                                <div class="expand-icon">▼</div>
+                            </div>
+                        </div>
+                        <div class="report-details">
+                            <div class="report-content">
+                                <div style="padding: 20px; text-align: center; color: #94a3b8;">
+                                    Report data not available
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const metadata = report.metadata || {};
+            const cardId = `${BATCH_RUN_PREFIX}${cardKey}`;
+            const screenshotCount = Array.isArray(report.screenshots) ? report.screenshots.length : 0;
+
+            reportIdByCardKey.set(cardKey, report.id);
+
+            return `
+                <div class="report-card ${isExpanded ? 'expanded' : ''}" id="${cardId}" data-report-id="${report.id}" data-card-key="${cardKey}">
+                    <div class="report-summary" onclick="toggleBatchRun('${cardKey}')">
+                        <div class="report-summary-left">
+                            <div class="report-info">
+                                <div class="report-url">${gameUrl}</div>
+                                <div class="report-meta-line">
+                                    <span>
+                                        <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+                                        ${new Date(metadata.timestamp || report.timestamp || Date.now()).toLocaleString()}
+                                    </span>
+                                    <span>
+                                        <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l3 3"/></svg></span>
+                                        ${((metadata.duration_ms || report.duration_ms || 0) / 1000).toFixed(1)}s
+                                    </span>
+                                    <span>
+                                        <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+                                        ${screenshotCount} screenshots
+                                    </span>
+                                </div>
+                                <div class="report-meta-line-secondary">
+                                    ${label ? `<span class="individual-run-label">${label}</span>` : ''}
+                                    <span class="meta-badge meta-badge-model">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                                        ${metadata.llm_model || 'N/A'}${metadata.reasoning_effort ? ` · ${metadata.reasoning_effort}` : ''}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="report-summary-right">
+                            <div class="status-badge status-${report.status || 'unknown'}">${report.status || 'unknown'}</div>
+                            <div class="score">${report.playability_score ?? '—'}<span style="font-size: 16px; color: #94a3b8;">/100</span></div>
+                            <div class="expand-icon" style="${isExpanded ? 'transform: rotate(180deg);' : ''}">▼</div>
+                        </div>
+                    </div>
+                    <div class="report-details">
+                        ${renderReportDetails(report, cardKey)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderReportDetails(report, cardKey) {
+            const metadata = report.metadata || {};
+            const testConfig = metadata.test_config || {};
+            const issues = Array.isArray(report.issues) ? report.issues : [];
+            const observations = Array.isArray(report.observations) ? report.observations : [];
+            const screenshots = Array.isArray(report.screenshots) ? report.screenshots : [];
+            const screenshotMetadata = Array.isArray(report.screenshot_metadata) ? report.screenshot_metadata : null;
+            const scoreBreakdown = report.score_breakdown;
+            const baseScores = scoreBreakdown?.base_scores || {};
+            const penalties = scoreBreakdown?.issue_penalties || {};
+            const confidenceFactor = scoreBreakdown?.confidence_factor ?? 0;
+            const finalScore = scoreBreakdown?.final_score ?? '—';
+            const gifPath = report.gif;
+            const sectionSet = expandedSectionsByReport.get(report.id);
+
+            const isScoreExpanded = sectionSet?.has('score');
+            const isIssuesExpanded = sectionSet?.has('issues');
+            const isObservationsExpanded = sectionSet?.has('observations');
+            const isGifExpanded = sectionSet?.has('gif');
+            const isScreenshotsExpanded = sectionSet?.has('screenshots');
+
+            return `
+                <div class="report-content">
+                    <div class="meta-grid">
+                        <div class="meta-item">
+                            <div class="meta-label">Confidence</div>
+                            <div class="meta-value">${report.confidence_score ?? metadata.confidence_score ?? 0}%</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Issues Found</div>
+                            <div class="meta-value">${issues.length}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">Browser</div>
+                            <div class="meta-value" style="font-size: 12px;">${metadata.browser || 'Unknown'}</div>
+                        </div>
+                        <div class="meta-item">
+                            <div class="meta-label">LLM Model</div>
+                            <div class="meta-value" style="font-size: 12px;">${metadata.llm_model || 'N/A'}${metadata.reasoning_effort ? ` · ${metadata.reasoning_effort}` : ''}</div>
+                        </div>
+                    </div>
+
+                    ${scoreBreakdown ? `
+                        <div class="collapsible-section ${isScoreExpanded ? 'expanded' : ''}" id="score--${cardKey}">
+                            <div class="section-header" onclick="toggleSection('score--${cardKey}', event)">
+                                <div class="section-title">
+                                    <span>Score Breakdown</span>
+                                </div>
+                                <div class="section-toggle">▼</div>
+                            </div>
+                            <div class="section-content">
+                                <div class="section-body">
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                            <div style="font-size: 9px; color: #6ee7b7; margin-bottom: 2px;">Load</div>
+                                            <div style="font-size: 16px; font-weight: 700; color: #10b981;">${Math.round(baseScores.load_success || 0)}</div>
+                                        </div>
+                                        <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
+                                        <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                            <div style="font-size: 9px; color: #93c5fd; margin-bottom: 2px;">Controls</div>
+                                            <div style="font-size: 16px; font-weight: 700; color: #3b82f6;">${Math.round(baseScores.controls || 0)}</div>
+                                        </div>
+                                        <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
+                                        <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                            <div style="font-size: 9px; color: #c4b5fd; margin-bottom: 2px;">Stability</div>
+                                            <div style="font-size: 16px; font-weight: 700; color: #8b5cf6;">${Math.round(baseScores.stability || 0)}</div>
+                                        </div>
+                                        <div style="font-size: 16px; color: #64748b; font-weight: 600;">+</div>
+                                        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                            <div style="font-size: 9px; color: #fbbf24; margin-bottom: 2px;">UI</div>
+                                            <div style="font-size: 16px; font-weight: 700; color: #f59e0b;">${Math.round(baseScores.ui_visibility || 0)}</div>
+                                        </div>
+                                        <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
+                                        <div style="background: rgba(102, 126, 234, 0.1); border: 1px solid rgba(102, 126, 234, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                            <div style="font-size: 9px; color: #94a3b8; margin-bottom: 2px;">Base</div>
+                                            <div style="font-size: 16px; font-weight: 700; color: #60a5fa;">${scoreBreakdown?.total_base ?? 0}</div>
+                                        </div>
+                                        ${penalties.total ? `
+                                            <div style="font-size: 16px; color: #64748b; font-weight: 600;">−</div>
+                                            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                <div style="font-size: 9px; color: #fca5a5; margin-bottom: 2px;">Penalties</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #ef4444;">${penalties.total}</div>
+                                            </div>
+                                            <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
+                                            <div style="background: rgba(102, 126, 234, 0.12); border: 1px solid rgba(102, 126, 234, 0.3); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                                <div style="font-size: 9px; color: #94a3b8; margin-bottom: 2px;">After</div>
+                                                <div style="font-size: 16px; font-weight: 700; color: #60a5fa;">${scoreBreakdown?.after_penalties ?? 0}</div>
+                                            </div>
+                                        ` : ''}
+                                        <div style="font-size: 16px; color: #64748b; font-weight: 600;">×</div>
+                                        <div style="background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 4px; padding: 6px 0; width: 80px; text-align: center;">
+                                            <div style="font-size: 9px; color: #c4b5fd; margin-bottom: 2px;">Confidence</div>
+                                            <div style="font-size: 16px; font-weight: 700; color: #a78bfa;">${confidenceFactor}%</div>
+                                        </div>
+                                        <div style="font-size: 16px; color: #64748b; font-weight: 600;">=</div>
+                                        <div style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%); border: 1px solid rgba(102, 126, 234, 0.4); border-radius: 4px; padding: 6px 0; width: 70px; text-align: center;">
+                                            <div style="font-size: 9px; color: #cbd5e1; margin-bottom: 2px;">Final</div>
+                                            <div style="font-size: 18px; font-weight: 700; color: #818cf8;">${finalScore}</div>
+                                        </div>
+                                    </div>
+                                    ${penalties.total ? `
+                                        <div style="background: rgba(0, 0, 0, 0.2); border-radius: 4px; padding: 6px 8px; font-size: 10px; color: #94a3b8; margin-top: 8px;">
+                                            <strong>Penalties:</strong>
+                                            ${penalties.critical ? `Critical: -${penalties.critical} ` : ''}
+                                            ${penalties.high ? `High: -${penalties.high} ` : ''}
+                                            ${penalties.medium ? `Medium: -${penalties.medium} ` : ''}
+                                            ${penalties.low ? `Low: -${penalties.low}` : ''}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${testConfig.game_context ? `
+                        <div class="config-section">
+                            <div class="config-title">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: currentColor; fill: none;">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/>
+                                </svg>
+                                Game Context Details
+                            </div>
+                            <div class="config-context-section" style="margin-top: 12px; padding-top: 0; border-top: none;">
+                                <div class="config-context-text">${testConfig.game_context}</div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${issues.length > 0 ? `
+                        <div class="collapsible-section ${isIssuesExpanded ? 'expanded' : ''}" id="issues--${cardKey}">
+                            <div class="section-header" onclick="toggleSection('issues--${cardKey}', event)">
+                                <div class="section-title">
+                                    <span>Issues</span>
+                                    <span class="section-count">${issues.length}</span>
+                                </div>
+                                <div class="section-toggle">▼</div>
+                            </div>
+                            <div class="section-content">
+                                <div class="section-body">
+                                    ${issues.map((issue) => `
+                                        <div class="issue ${issue.severity}">
+                                            <div class="issue-icon">
+                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 20px; height: 20px;">
+                                                    <circle cx="12" cy="12" r="10" fill="${issue.severity === 'critical' ? '#ef4444' : issue.severity === 'high' ? '#f59e0b' : issue.severity === 'medium' ? '#eab308' : '#10b981'}" stroke="none"/>
+                                                    <path d="M12 8v4M12 16h.01" stroke="white" stroke-width="2"/>
+                                                </svg>
+                                            </div>
+                                            <div class="issue-content">
+                                                <div class="issue-header">${issue.severity} - ${issue.category}</div>
+                                                <div class="issue-text">${issue.description}</div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${observations.length > 0 ? `
+                        <div class="collapsible-section ${isObservationsExpanded ? 'expanded' : ''}" id="observations--${cardKey}">
+                            <div class="section-header" onclick="toggleSection('observations--${cardKey}', event)">
+                                <div class="section-title">
+                                    <span>LLM Observations</span>
+                                    <span class="section-count">${observations.length}</span>
+                                </div>
+                                <div class="section-toggle">▼</div>
+                            </div>
+                            <div class="section-content">
+                                <div class="section-body">
+                                    <div class="observations-list">
+                                        ${observations.map((obs) => `
+                                            <div class="observation-item">
+                                                <div class="observation-bullet">•</div>
+                                                <div class="observation-text">${obs}</div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${gifPath ? `
+                        <div class="collapsible-section ${isGifExpanded ? 'expanded' : ''}" id="gif--${cardKey}">
+                            <div class="section-header" onclick="toggleSection('gif--${cardKey}', event)">
+                                <div class="section-title">
+                                    <span>Gameplay Recording</span>
+                                </div>
+                                <div class="section-toggle">▼</div>
+                            </div>
+                            <div class="section-content">
+                                <div class="section-body">
+                                    <div class="gif-container">
+                                        <img src="/${gifPath}" alt="Gameplay GIF">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${screenshots.length > 0 ? `
+                        <div class="collapsible-section ${isScreenshotsExpanded ? 'expanded' : ''}" id="screenshots--${cardKey}">
+                            <div class="section-header" onclick="toggleSection('screenshots--${cardKey}', event)">
+                                <div class="section-title">
+                                    <span>Screenshots</span>
+                                    <span class="section-count">${screenshots.length}</span>
+                                </div>
+                                <div class="section-toggle">▼</div>
+                            </div>
+                            <div class="section-content">
+                                <div class="section-body">
+                                    <div class="screenshots-grid">
+                                        ${(screenshotMetadata || screenshots.map((path) => ({ path }))).map((screenshot, index) => {
+                                            const path = typeof screenshot === 'string' ? screenshot : screenshot.path;
+                                            const meta = typeof screenshot === 'object' ? screenshot : null;
+                                            return `
+                                                <div class="screenshot-item-wrapper">
+                                                    <div class="screenshot-item" onclick="openScreenshot('${cardKey}', ${index})">
+                                                        <img src="/${path}" alt="Screenshot ${index + 1}" loading="lazy">
+                                                    </div>
+                                                    ${meta && (meta.llm_action || meta.llm_reasoning) ? `
+                                                        <div class="screenshot-llm-info">
+                                                            ${meta.llm_action ? `
+                                                                <div class="screenshot-action">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: #818cf8; flex-shrink: 0;">
+                                                                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                                                                        <path d="M6 8h.01M10 8h.01M14 8h.01"/>
+                                                                    </svg>
+                                                                    <span class="action-keys">${meta.llm_action}</span>
+                                                                </div>
+                                                            ` : ''}
+                                                            ${meta.llm_reasoning ? `
+                                                                <div class="screenshot-reasoning">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 14px; height: 14px; stroke: #94a3b8; flex-shrink: 0; margin-top: 2px;">
+                                                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                                                                    </svg>
+                                                                    <span class="reasoning-text">${meta.llm_reasoning}</span>
+                                                                </div>
+                                                            ` : ''}
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function toggleSection(sectionId, evt) {
+            if (evt) evt.stopPropagation();
+            const section = document.getElementById(sectionId);
+            if (!section) return;
+            section.classList.toggle('expanded');
+            const [sectionName, cardKey] = sectionId.split('--');
+            if (!cardKey) return;
+            const reportId = reportIdByCardKey.get(cardKey) || batchRunLookup.get(cardKey)?.result?.reportId || batchRunLookup.get(cardKey)?.report?.id;
+            if (!reportId) return;
+            let sectionSet = expandedSectionsByReport.get(reportId);
+            if (!sectionSet) {
+                sectionSet = new Set();
+                expandedSectionsByReport.set(reportId, sectionSet);
+            }
+            if (section.classList.contains('expanded')) {
+                sectionSet.add(sectionName);
+            } else {
+                sectionSet.delete(sectionName);
+            }
+        }
+
+        async function deleteReport(reportId, type, evt) {
+            if (evt) evt.stopPropagation();
+            const isBatch = type === 'batch';
+            const message = isBatch
+                ? 'Delete this batch report and all associated runs?'
+                : 'Delete this test report?';
+            if (!confirm(message)) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/reports/${reportId}`, { method: 'DELETE' });
+                if (!response.ok) {
+                    const error = await response.json().catch(() => ({}));
+                    throw new Error(error.error || 'Failed to delete report');
+                }
+
+                if (isBatch) {
+                    const targetBatch = batchReports.find((report) => report.id === reportId)
+                        || allReports.find((report) => report.id === reportId && report.type === 'batch');
+                    const embeddedIds = new Set();
+
+                    if (targetBatch && Array.isArray(targetBatch.results)) {
+                        targetBatch.results.forEach((result) => {
+                            if (result?.reportId) {
+                                embeddedIds.add(result.reportId);
+                            }
+                            if (result?.report?.id) {
+                                embeddedIds.add(result.report.id);
+                            }
+                        });
+                    }
+
+                    batchReports = batchReports.filter((report) => report.id !== reportId);
+                    allReports = allReports.filter((report) => report.id !== reportId);
+                    expandedBatchId = expandedBatchId === reportId ? null : expandedBatchId;
+
+                    Array.from(batchRunLookup.entries()).forEach(([key, info]) => {
+                        if (info?.batchId === reportId) {
+                            batchRunLookup.delete(key);
+                            expandedIndividualRuns.delete(key);
+                        }
+                    });
+
+                    if (embeddedIds.size > 0) {
+                        individualReports = individualReports.filter((report) => !embeddedIds.has(report.id));
+                        embeddedIds.forEach((id) => {
+                            expandedIndividualReports.delete(id);
+                            expandedSectionsByReport.delete(id);
+                        });
+                    }
+                } else {
+                    individualReports = individualReports.filter((report) => report.id !== reportId);
+                    allReports = allReports.filter((report) => report.id !== reportId);
+                    expandedIndividualReports.delete(reportId);
+                    expandedSectionsByReport.delete(reportId);
+                }
+
+                indexIndividualReports(individualReports);
+                updateStats();
+                renderReports();
+            } catch (error) {
+                alert(`Failed to delete report: ${error.message}`);
+            }
+        }
+
+        function openScreenshot(identifier, imgIdx) {
+            let report = null;
+
+            if (typeof identifier === 'string') {
+                const reportId = reportIdByCardKey.get(identifier);
+                if (reportId) {
+                    report = getReportById(reportId);
+                }
+                if (!report && batchRunLookup.has(identifier)) {
+                    const info = batchRunLookup.get(identifier);
+                    report = info?.report || getReportById(info?.result?.reportId);
+                    if (!report && info?.batchId) {
+                        loadBatchDetails(info.batchId).then((data) => {
+                            const runReport = data?.individualReports?.find((item) => item.id === info?.result?.reportId) || null;
+                            if (runReport && Array.isArray(runReport.screenshots) && runReport.screenshots.length > 0) {
+                                currentImages = runReport.screenshots.map((path) => `/${path}`);
+                                currentImageIndex = imgIdx;
+                                showImage();
+                                document.getElementById('screenshot-modal').classList.add('active');
+                            }
+                        }).catch((error) => console.error('Failed to load batch details for screenshot:', error));
+                        return;
+                    }
+                }
+            } else {
+                const idx = parseInt(identifier, 10);
+                if (!Number.isNaN(idx)) {
+                    const filtered = getFilteredReports();
+                    report = filtered[idx];
+                }
+            }
+
+            if (!report || !Array.isArray(report.screenshots) || report.screenshots.length === 0) {
+                return;
+            }
+
+            currentImages = report.screenshots.map((path) => `/${path}`);
             currentImageIndex = imgIdx;
             showImage();
             document.getElementById('screenshot-modal').classList.add('active');
@@ -1411,35 +2056,40 @@
             showImage();
         }
 
-        // Close modal
+        document.getElementById('filter-select').addEventListener('change', (event) => {
+            currentFilter = event.target.value;
+            renderReports();
+        });
+
         document.querySelector('.modal-close').addEventListener('click', () => {
             document.getElementById('screenshot-modal').classList.remove('active');
         });
 
-        document.getElementById('screenshot-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'screenshot-modal') {
-                e.target.classList.remove('active');
+        document.getElementById('screenshot-modal').addEventListener('click', (event) => {
+            if (event.target.id === 'screenshot-modal') {
+                event.target.classList.remove('active');
             }
         });
 
-        // Arrow key navigation
-        document.addEventListener('keydown', (e) => {
+        document.addEventListener('keydown', (event) => {
             const modal = document.getElementById('screenshot-modal');
-            if (modal.classList.contains('active')) {
-                if (e.key === 'ArrowLeft') {
-                    navigateImage(-1);
-                } else if (e.key === 'ArrowRight') {
-                    navigateImage(1);
-                } else if (e.key === 'Escape') {
-                    modal.classList.remove('active');
-                }
-            }
+            if (!modal.classList.contains('active')) return;
+            if (event.key === 'ArrowLeft') navigateImage(-1);
+            if (event.key === 'ArrowRight') navigateImage(1);
+            if (event.key === 'Escape') modal.classList.remove('active');
         });
 
-        // Load on start
-        loadReports();
+        Object.assign(window, {
+            loadReports,
+            toggleBatchReport,
+            toggleBatchRun,
+            toggleIndividualReport,
+            toggleSection,
+            deleteReport,
+            openScreenshot
+        });
 
-        // Auto-refresh every 30 seconds
+        loadReports();
         setInterval(loadReports, 30000);
     </script>
 </body>

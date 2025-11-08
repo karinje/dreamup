@@ -293,34 +293,92 @@ export interface QAOptions {
 }
 
 /**
+ * Per-game configuration for batch testing
+ * All fields are optional - if not specified, uses global defaults from BatchTestConfig
+ */
+export interface BatchGameConfig {
+  url: string;
+  name?: string;
+  
+  // Per-game overrides (take priority over global defaults)
+  inputHints?: InputHints;
+  gameContext?: string;
+  model?: string;
+  pauseInterval?: number;
+  gameSpeed?: number;
+  quickTest?: boolean;
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  timeout?: number;
+  maxActionCount?: number;
+}
+
+/**
  * Batch test configuration
+ * Supports arrays for all options to generate combinations
+ * Games can have per-game config (inputHints, gameContext) or use global arrays
  */
 export interface BatchTestConfig {
-  games: Array<{
-    url: string;
-    name?: string;
-  }>;
-  cooldownMs?: number;
-  continueOnError?: boolean;
+  // Games to test (required)
+  // Can be URLs (string) or game config objects with per-game settings
+  games: Array<string | BatchGameConfig>;
+  
+  // Options that can be arrays to generate combinations
+  models?: string[];
+  pauseInterval?: number[];
+  gameSpeed?: number[];
+  inputHints?: Array<InputHints | undefined>; // Global hints (used if game doesn't have its own)
+  gameContext?: Array<string | undefined>; // Global context (used if game doesn't have its own)
+  quickTest?: boolean; // Single value (true/false) or omit for both
+  reasoningEffort?: Array<'low' | 'medium' | 'high' | undefined>;
+  timeout?: number[];
+  maxActionCount?: number[];
+  
+  // Batch execution settings
+  maxParallel?: number; // Max parallel browsers (default: 5)
+  cooldownMs?: number; // Cooldown between batches
+  continueOnError?: boolean; // Continue if individual test fails
+  verbose?: boolean;
+  outputDir?: string;
 }
 
 /**
  * Batch test results
  */
 export interface BatchTestReport {
-  total: number;
-  passed: number;
-  failed: number;
-  errors: number;
-  reports: Array<{
-    gameUrl: string;
-    gameName?: string;
-    report: QAReport;
-  }>;
+  batchId: string;
+  timestamp: string;
+  duration_ms: number;
+  config: {
+    games: Array<string | BatchGameConfig>;
+    models?: string[];
+    pauseInterval?: number[];
+    gameSpeed?: number[];
+    inputHints?: string; // 'provided' if any hints were used
+    gameContext?: string; // 'provided' if any context was used
+    quickTest?: boolean;
+    reasoningEffort?: Array<'low' | 'medium' | 'high' | undefined>;
+    timeout?: number[];
+    maxActionCount?: number[];
+    maxParallel: number;
+    cooldownMs?: number;
+  };
   summary: {
+    total: number;
+    passed: number;
+    failed: number;
+    errors: number;
+    skipped: number;
     avg_playability_score: number;
     avg_confidence_score: number;
     total_duration_ms: number;
   };
+  results: Array<{
+    gameUrl: string;
+    gameName?: string;
+    label: string; // Combination label (e.g., "model:gpt-4o,pause:0.5,quick")
+    report: QAReport | null;
+    error?: string;
+    reportId?: string; // Reference to individual report directory
+  }>;
 }
 

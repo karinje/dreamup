@@ -3,15 +3,25 @@
  */
 
 import { Stagehand } from '@browserbasehq/stagehand';
+import { AsyncLocalStorage } from 'async_hooks';
 import { getConfig } from '../utils/config.js';
 import { logger } from '../utils/logger.js';
 import { retry, PAGE_LOAD_RETRY } from '../utils/retry.js';
 import { BrowserError, PageLoadTimeoutError } from '../utils/errors.js';
 
+// Use AsyncLocalStorage to support parallel test execution
+// Each async context gets its own browser instance ID
+export const browserStorage = new AsyncLocalStorage<string>();
+
+// Map to store browser instances keyed by test ID
+const browserInstances = new Map<string, Stagehand>();
+
+// Fallback to global for backward compatibility (single test mode)
 let stagehandInstance: Stagehand | null = null;
 
 /**
  * Initialize Stagehand browser with Browserbase
+ * Stores the instance in the current async context for parallel execution support
  */
 export async function initBrowser(): Promise<Stagehand> {
   const config = getConfig();
@@ -32,7 +42,15 @@ export async function initBrowser(): Promise<Stagehand> {
 
     await stagehand.init();
 
-    stagehandInstance = stagehand;
+    // Store in async context if we're in one (created by browserStorage.run())
+    const testId = browserStorage.getStore();
+    if (testId !== undefined) {
+      // We're in an async context - store the instance in the Map
+      browserInstances.set(testId, stagehand);
+    } else {
+      // Not in an async context, use global (backward compatibility)
+      stagehandInstance = stagehand;
+    }
 
     logger.info('Browser initialized successfully');
     return stagehand;
@@ -44,8 +62,20 @@ export async function initBrowser(): Promise<Stagehand> {
 
 /**
  * Get current Stagehand instance
+ * Checks async context first (for parallel execution), then falls back to global
  */
 export function getBrowser(): Stagehand {
+  // First check async context (for parallel execution)
+  const testId = browserStorage.getStore();
+  if (testId !== undefined) {
+    const instance = browserInstances.get(testId);
+    if (instance) {
+      return instance;
+    }
+    throw new BrowserError(`Browser not initialized for test ${testId}. Call initBrowser() first.`);
+  }
+  
+  // Fallback to global (for backward compatibility)
   if (!stagehandInstance) {
     throw new BrowserError('Browser not initialized. Call initBrowser() first.');
   }
@@ -197,15 +227,30 @@ export async function setViewportSize(width: number, height: number): Promise<vo
  * Close the browser and cleanup
  */
 export async function closeBrowser(): Promise<void> {
-  if (!stagehandInstance) {
+  // Get the instance from async context or global
+  const testId = browserStorage.getStore();
+  let instance: Stagehand | null = null;
+  
+  if (testId !== undefined) {
+    // We're in an async context - get instance from Map
+    instance = browserInstances.get(testId) || null;
+    if (instance) {
+      browserInstances.delete(testId);
+    }
+  } else {
+    // Use global
+    instance = stagehandInstance;
+    stagehandInstance = null;
+  }
+  
+  if (!instance) {
     return;
   }
 
   logger.info('Closing browser');
 
   try {
-    await stagehandInstance.close();
-    stagehandInstance = null;
+    await instance.close();
     logger.info('Browser closed successfully');
   } catch (error) {
     logger.error('Error closing browser', error as Error);

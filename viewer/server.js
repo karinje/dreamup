@@ -49,7 +49,32 @@ app.delete('/api/reports/*', async (req, res) => {
       return res.status(404).json({ error: 'Report not found' });
     }
     
-    // Delete entire directory recursively
+    // Check if this is a batch report - if so, delete all individual reports first
+    const batchReportPath = join(reportDir, 'batch-report.json');
+    try {
+      const batchData = await readFile(batchReportPath, 'utf-8');
+      const batchReport = JSON.parse(batchData);
+      
+      // Delete all individual reports referenced in the batch
+      if (batchReport.results && Array.isArray(batchReport.results)) {
+        for (const result of batchReport.results) {
+          if (result.reportId) {
+            const individualReportDir = join(OUTPUT_DIR, result.reportId);
+            try {
+              await access(individualReportDir);
+              await rm(individualReportDir, { recursive: true, force: true });
+              console.log(`✅ Deleted individual report: ${result.reportId}`);
+            } catch (err) {
+              console.log(`⚠️  Individual report ${result.reportId} not found or already deleted`);
+            }
+          }
+        }
+      }
+    } catch {
+      // Not a batch report, continue with normal deletion
+    }
+    
+    // Delete the batch report directory itself (or individual report directory)
     await rm(reportDir, { recursive: true, force: true });
     
     console.log(`✅ Deleted report: ${reportId}`);
@@ -61,21 +86,39 @@ app.delete('/api/reports/*', async (req, res) => {
   }
 });
 
-// API: Get all reports
+// API: Get all reports (including batch reports)
 app.get('/api/reports', async (req, res) => {
   try {
     const dirs = await readdir(OUTPUT_DIR);
     const reports = [];
+    const batchReports = [];
 
     for (const dir of dirs) {
       if (dir === '.gitkeep') continue;
 
+      // Check if this is a batch report directory
+      const batchReportPath = join(OUTPUT_DIR, dir, 'batch-report.json');
+      try {
+        const batchData = await readFile(batchReportPath, 'utf-8');
+        const batchReport = JSON.parse(batchData);
+        batchReports.push({
+          id: dir,
+          type: 'batch',
+          ...batchReport,
+        });
+        continue; // Skip individual report check for batch directories
+      } catch {
+        // Not a batch report, check for individual report
+      }
+
+      // Check for individual report
       const reportPath = join(OUTPUT_DIR, dir, 'qa-report.json');
       try {
         const data = await readFile(reportPath, 'utf-8');
         const report = JSON.parse(data);
         reports.push({
           id: dir,
+          type: 'individual',
           ...report,
         });
       } catch (err) {
@@ -87,10 +130,60 @@ app.get('/api/reports', async (req, res) => {
     reports.sort((a, b) => 
       new Date(b.metadata.timestamp) - new Date(a.metadata.timestamp)
     );
+    batchReports.sort((a, b) => 
+      new Date(b.timestamp) - new Date(a.timestamp)
+    );
 
-    res.json(reports);
+    res.json({
+      individual: reports,
+      batch: batchReports,
+      all: [...batchReports, ...reports].sort((a, b) => {
+        const aTime = a.type === 'batch' ? new Date(a.timestamp) : new Date(a.metadata.timestamp);
+        const bTime = b.type === 'batch' ? new Date(b.timestamp) : new Date(b.metadata.timestamp);
+        return bTime - aTime;
+      }),
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Get batch report with all individual runs
+app.get('/api/batch/:id', async (req, res) => {
+  try {
+    const batchReportPath = join(OUTPUT_DIR, req.params.id, 'batch-report.json');
+    const batchData = await readFile(batchReportPath, 'utf-8');
+    const batchReport = JSON.parse(batchData);
+    
+    // Load all individual reports referenced in the batch
+    const individualReports = [];
+    for (const result of batchReport.results) {
+      if (result.reportId) {
+        try {
+          const reportPath = join(OUTPUT_DIR, result.reportId, 'qa-report.json');
+          const reportData = await readFile(reportPath, 'utf-8');
+          const report = JSON.parse(reportData);
+          individualReports.push({
+            id: result.reportId,
+            ...report,
+            label: result.label,
+            gameName: result.gameName,
+          });
+        } catch (err) {
+          console.error(`Failed to load individual report ${result.reportId}:`, err.message);
+        }
+      }
+    }
+    
+    res.json({
+      batch: {
+        id: req.params.id,
+        ...batchReport,
+      },
+      individualReports,
+    });
+  } catch (error) {
+    res.status(404).json({ error: 'Batch report not found' });
   }
 });
 

@@ -1,0 +1,17 @@
+{
+  "games": [
+    "https://gabrielecirulli.github.io/2048/",
+    {
+      "url": "https://play2048.co",
+      "name": "2048 Alternative"
+    }
+  ],
+  "models": ["gpt-4o", "gpt-4o-mini"],
+  "pauseInterval": [0.5, 1.0],
+  "quickTest": true,
+  "maxParallel": 5,
+  "cooldownMs": 1000,
+  "verbose": false,
+  "outputDir": "output"
+}
+
