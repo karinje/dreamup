@@ -33,6 +33,7 @@ function parseArgs(): {
   timeout?: number;
   gameContext?: string;
   quickTest?: boolean;
+  collectPerformanceMetrics?: boolean;
 } {
   const args = process.argv.slice(2);
 
@@ -50,6 +51,7 @@ function parseArgs(): {
     timeout: undefined as number | undefined,
     gameContext: undefined as string | undefined,
     quickTest: false,
+    collectPerformanceMetrics: undefined as boolean | undefined,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -96,6 +98,8 @@ function parseArgs(): {
       result.gameContext = args[++i];
     } else if (arg === '--quick-test') {
       result.quickTest = true;
+    } else if (arg === '--collect-performance') {
+      result.collectPerformanceMetrics = true;
     } else if (!arg.startsWith('-') && !result.gameUrl) {
       result.gameUrl = arg;
     }
@@ -169,6 +173,8 @@ Options:
   --reasoning-effort <level>  Reasoning effort level for gpt-5 and o1 models
                           Options: low, medium, high (default: medium)
                           Example: --model gpt-5 --reasoning-effort high
+  --collect-performance    Capture performance metrics (load timing, FPS, latency)
+                          Disabled by default
   -h, --help              Show this help message
 
 Examples:
@@ -315,6 +321,9 @@ async function main(): Promise<void> {
   if (args.gameContext && !args.quickTest) {
     console.log(`Game Context: ${args.gameContext.substring(0, 60)}${args.gameContext.length > 60 ? '...' : ''}`);
   }
+  if (args.collectPerformanceMetrics) {
+    console.log(`Performance Metrics: Enabled`);
+  }
 
   try {
     printProgress('Initializing browser');
@@ -349,6 +358,7 @@ async function main(): Promise<void> {
       gameContext: args.gameContext,
       quickTest: args.quickTest,
       reasoningEffort: args.reasoningEffort,
+      collectPerformanceMetrics: args.collectPerformanceMetrics,
     });
 
     printResults(report);

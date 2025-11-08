@@ -61,6 +61,11 @@ node dist/cli.js <game-url> [options]
   - Default timeout: 30s
   - Cannot be used with `--pause`, `--speed`, or `--model`
 
+#### Performance Metrics
+- `--collect-performance` - Capture navigation timing, FPS samples, interaction latency, long-task blocking time, slow resources, console error count, and heap usage
+  - Disabled by default to minimize overhead and Browserbase session work
+  - Equivalent environment flag: `COLLECT_PERFORMANCE_METRICS=true`
+
 #### Timeout
 - `-t, --timeout <ms>` - Test execution timeout in milliseconds
   - Default: `300000` (5 minutes)
@@ -125,6 +130,22 @@ node dist/cli.js \
 - Runs for 5 minutes (default timeout) before timeout
 - No pause mode flag = regular LLM mode with continuous gameplay
 
+### Example 4: Pong with Performance Telemetry
+
+```bash
+qa-agent https://electroacoustic-lashawnda-unlunar.ngrok-free.dev/pong/ \
+  --pause 0.35 \
+  --timeout 480000 \
+  --context "Pong game: You control the right paddle. Use ArrowUp to move the paddle up and ArrowDown to move the paddle down." \
+  --hints "Use ArrowUp to move paddle up and ArrowDown to move paddle down" \
+  --collect-performance
+```
+
+**What this does:**
+- Runs the DreamUp Pong example with pause-step synchronization and input hints
+- Enables performance telemetry (load timing, FPS, interaction latency, long tasks, slow resources, memory)
+- Surfaced in the dashboard inside the “Performance Metrics” panel and stored in `qa-report.json.performance`
+
 ## Understanding the Results
 
 ### Status
@@ -155,6 +176,7 @@ node dist/cli.js \
 
 After running a test, you'll find:
 - **Report**: `output/<session-dir>/qa-report.json` - Complete test report with scores, issues, metadata
+- **Performance metrics**: When `--collect-performance` (or env flag) is enabled, the report includes a `performance` block with navigation timing, FPS, latency, long tasks, slow resources, console errors, and memory snapshot data
 - **Screenshots**: `output/<session-dir>/screenshots/` - All captured screenshots with LLM metadata
 - **GIF**: `output/<session-dir>/*.gif` - Animated gameplay visualization
 - **Logs**: `output/<session-dir>/logs/console-logs.json` - Browser console logs

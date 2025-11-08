@@ -12,6 +12,7 @@
   "maxParallel": 5,
   "cooldownMs": 1000,
   "verbose": false,
-  "outputDir": "output"
+  "outputDir": "output",
+  "collectPerformanceMetrics": false
 }
 

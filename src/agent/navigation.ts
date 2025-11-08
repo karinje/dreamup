@@ -15,6 +15,7 @@ import {
 } from './interactions.js';
 import { captureScreenshot } from '../evidence/screenshots.js';
 import { isPageResponsive, evaluateInPage } from './browser.js';
+import { startFpsSampling, PerformanceTracker } from './perf.js';
 
 // Store current gameState for timeout handler access
 let currentGameState: GameState | null = null;
@@ -56,7 +57,8 @@ export async function navigateGame(
   pauseInterval?: number,
   gameContext?: string,
   quickTest?: boolean,
-  reasoningEffort?: 'low' | 'medium' | 'high'
+  reasoningEffort?: 'low' | 'medium' | 'high',
+  performanceTracker?: PerformanceTracker
 ): Promise<GameState> {
   currentGameState = state;  // Keep reference updated
   const config = getConfig();
@@ -154,7 +156,7 @@ export async function navigateGame(
       source: controlScheme?.source,
     });
 
-    await conductGameplaySession(sessionDir, state, config.maxActionCount, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest, reasoningEffort);
+    await conductGameplaySession(sessionDir, state, config.maxActionCount, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest, reasoningEffort, performanceTracker);
 
     // Phase 5: Check final state
     const isGameOver = await detectGameOver();
@@ -199,13 +201,18 @@ async function conductGameplaySession(
   pauseInterval?: number,
   gameContext?: string,
   quickTest?: boolean,
-  reasoningEffort?: 'low' | 'medium' | 'high'
+  reasoningEffort?: 'low' | 'medium' | 'high',
+  performanceTracker?: PerformanceTracker
 ): Promise<void> {
   logger.info(quickTest ? 'Starting quick test gameplay session' : 'Starting LLM-driven gameplay session', { 
     maxActions, 
     pauseMode: !!pauseInterval,
     quickTest: !!quickTest 
   });
+  
+  if (performanceTracker) {
+    await startFpsSampling();
+  }
   
   // Import here to avoid circular dependency (only needed for LLM mode)
   const { getGameplayAction } = quickTest ? { getGameplayAction: null as any } : await import('../evaluation/analyzer.js');
@@ -229,6 +236,7 @@ async function conductGameplaySession(
   const recentScreenshots: Screenshot[] = [];
 
   for (let i = 0; i < maxActions && state.actionCount < maxActions; i++) {
+    const cycleStart = Date.now();
     try {
       // Check if page is still responsive
       const responsive = await isPageResponsive();
@@ -387,6 +395,13 @@ async function conductGameplaySession(
 
       state.lastActionTime = Date.now();
 
+      const cycleDuration = Date.now() - cycleStart;
+      performanceTracker?.recordInteraction({
+        label: pauseInterval ? 'pause_cycle' : quickTest ? 'quick_cycle' : 'llm_cycle',
+        durationMs: cycleDuration,
+        keys: keysToPress,
+      });
+
       // Check if we're stuck (same state for too long)
       if (await isStuck(state)) {
         logger.warn('Game appears stuck, attempting recovery');
@@ -397,10 +412,20 @@ async function conductGameplaySession(
         error: (error as Error).message,
         action: i,
       });
+
+      performanceTracker?.recordInteraction({
+        label: 'llm_cycle_error',
+        durationMs: Date.now() - cycleStart,
+      });
       
       // Fallback to simple keyboard controls
       try {
+        const fallbackStart = Date.now();
         await simulateGameplayInput(3000, controlScheme);
+        performanceTracker?.recordInteraction({
+          label: 'fallback_simulation',
+          durationMs: Date.now() - fallbackStart,
+        });
         state.actionHistory.push('Fallback: keyboard input');
         state.actionCount += 3;
       } catch (fallbackError) {

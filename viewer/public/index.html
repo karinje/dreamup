@@ -13,16 +13,16 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-            color: #e2e8f0;
+            background: linear-gradient(135deg, #0a0f1e 0%, #0f1729 50%, #141d35 100%);
+            color: #f8fafc;
             min-height: 100vh;
         }
 
         /* Modern Header */
         .header {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(20px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(10, 15, 30, 0.85);
+            backdrop-filter: blur(22px);
+            border-bottom: 1px solid rgba(100, 116, 139, 0.25);
             padding: 20px 0;
             position: sticky;
             top: 0;
@@ -119,12 +119,12 @@
         }
 
         .stat-card {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 20px;
+            background: linear-gradient(165deg, rgba(30, 41, 59, 0.95), rgba(79, 70, 229, 0.25));
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 14px;
+            padding: 22px;
             text-align: center;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
         }
 
         .stat-value {
@@ -143,54 +143,64 @@
 
         /* Report Cards */
         .report-card {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            margin-bottom: 20px;
+            background: linear-gradient(170deg, rgba(30, 41, 59, 0.98), rgba(51, 65, 85, 0.92));
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-radius: 14px;
+            margin-bottom: 22px;
             overflow: hidden;
             transition: all 0.3s ease;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
         }
 
         .batch-card {
-            background: rgba(139, 92, 246, 0.08);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(139, 92, 246, 0.25);
-            border-radius: 12px;
-            margin-bottom: 20px;
+            background: linear-gradient(170deg, rgba(91, 33, 182, 0.28), rgba(99, 102, 241, 0.22));
+            border: 1px solid rgba(165, 180, 252, 0.42);
+            border-radius: 14px;
+            margin-bottom: 22px;
             overflow: hidden;
             transition: all 0.3s ease;
+            box-shadow: 0 22px 55px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(139, 92, 246, 0.15);
         }
 
         .batch-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 40px rgba(139, 92, 246, 0.25);
+            transform: translateY(-4px);
+            box-shadow: 0 28px 65px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(139, 92, 246, 0.25);
         }
 
         .batch-badge {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 4px 10px;
-            border-radius: 6px;
+            padding: 5px 12px;
+            border-radius: 999px;
             font-size: 10px;
             font-weight: 700;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
-            background: rgba(139, 92, 246, 0.15);
-            border: 1px solid rgba(139, 92, 246, 0.35);
-            color: #c4b5fd;
+            letter-spacing: 0.6px;
+            background: rgba(129, 140, 248, 0.25);
+            border: 1px solid rgba(165, 180, 252, 0.4);
+            color: #eef2ff;
+        }
+
+        .batch-badge svg {
+            width: 13px;
+            height: 13px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
         .batch-summary-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 16px;
+            gap: 18px;
             margin-top: 20px;
-            padding: 16px;
-            background: rgba(15, 23, 42, 0.5);
-            border-radius: 10px;
-            border: 1px solid rgba(148, 163, 184, 0.2);
+            padding: 18px;
+            background: rgba(15, 23, 42, 0.85);
+            border-radius: 12px;
+            border: 1px solid rgba(100, 116, 139, 0.3);
         }
 
         .batch-stat {
@@ -238,8 +248,8 @@
         }
 
         .report-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+            transform: translateY(-4px);
+            box-shadow: 0 26px 60px rgba(0, 0, 0, 0.7);
         }
 
         .report-summary {
@@ -252,7 +262,7 @@
         }
 
         .report-summary:hover {
-            background: rgba(255, 255, 255, 0.02);
+            background: rgba(255, 255, 255, 0.06);
         }
 
         .report-summary-left {
@@ -269,7 +279,7 @@
         .report-url {
             font-size: 16px;
             font-weight: 600;
-            color: #e2e8f0;
+            color: #f1f5f9;
             margin-bottom: 8px;
         }
 
@@ -307,13 +317,13 @@
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            padding: 5px 10px;
-            border-radius: 6px;
+            padding: 6px 11px;
+            border-radius: 7px;
             font-size: 11px;
             font-weight: 500;
-            background: rgba(102, 126, 234, 0.12);
-            border: 1px solid rgba(102, 126, 234, 0.25);
-            color: #a5b4fc;
+            background: rgba(99, 102, 241, 0.22);
+            border: 1px solid rgba(129, 140, 248, 0.35);
+            color: #ddd6fe;
         }
 
         .meta-badge svg {
@@ -566,10 +576,10 @@
         /* Collapsible Sections */
         .collapsible-section {
             margin: 15px 0;
-            background: rgba(0, 0, 0, 0.2);
+            background: rgba(15, 23, 42, 0.6);
             border-radius: 10px;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(100, 116, 139, 0.25);
         }
 
         .section-header {
@@ -582,7 +592,7 @@
         }
 
         .section-header:hover {
-            background: rgba(255, 255, 255, 0.03);
+            background: rgba(255, 255, 255, 0.05);
         }
 
         .section-title {
@@ -1009,6 +1019,66 @@
         .individual-runs-container .report-card.expanded .report-details {
             max-height: 10000px !important;
         }
+
+        .performance-section {
+            margin-top: 28px;
+        }
+
+        .performance-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .performance-card {
+            background: rgba(148, 163, 184, 0.08);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            border-radius: 10px;
+            padding: 14px;
+        }
+
+        .performance-card .perf-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #94a3b8;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .performance-card .perf-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .performance-card .perf-subvalue {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .performance-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 18px;
+        }
+
+        .performance-table th,
+        .performance-table td {
+            padding: 8px 10px;
+            text-align: left;
+            font-size: 12px;
+            color: #cbd5e1;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+        }
+
+        .performance-table th {
+            text-transform: uppercase;
+            font-size: 10px;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+        }
     </style>
 </head>
 <body>
@@ -1347,7 +1417,13 @@
                             </button>
                             <div class="report-info">
                                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                    <span class="batch-badge">📦 Batch Test</span>
+                                    <span class="batch-badge">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+                                            <path d="M5 3v18"/>
+                                            <path d="M5 5h12l-2.5 4L17 13H5"/>
+                                        </svg>
+                                        Batch Test
+                                    </span>
                                     <div class="report-url" style="margin: 0;">${gamesCount} game${gamesCount === 1 ? '' : 's'} · ${testsTotal} run${testsTotal === 1 ? '' : 's'}</div>
                                 </div>
                                 <div class="report-meta-line">
@@ -1679,6 +1755,7 @@
             const gifPath = report.gif;
             const sectionSet = expandedSectionsByReport.get(report.id);
 
+            const isPerformanceExpanded = sectionSet?.has('performance');
             const isScoreExpanded = sectionSet?.has('score');
             const isIssuesExpanded = sectionSet?.has('issues');
             const isObservationsExpanded = sectionSet?.has('observations');
@@ -1705,6 +1782,8 @@
                             <div class="meta-value" style="font-size: 12px;">${metadata.llm_model || 'N/A'}${metadata.reasoning_effort ? ` · ${metadata.reasoning_effort}` : ''}</div>
                         </div>
                     </div>
+
+                    ${renderPerformanceMetrics(report.performance, metadata, cardKey, isPerformanceExpanded)}
 
                     ${scoreBreakdown ? `
                         <div class="collapsible-section ${isScoreExpanded ? 'expanded' : ''}" id="score--${cardKey}">
@@ -2091,6 +2170,213 @@
 
         loadReports();
         setInterval(loadReports, 30000);
+
+        function formatMs(value) {
+            const num = Number(value);
+            if (Number.isNaN(num) || num === undefined || num === null) return '—';
+            if (Math.abs(num) >= 1000) return `${(num / 1000).toFixed(2)}s`;
+            return `${Math.round(num)}ms`;
+        }
+
+        function formatFps(value) {
+            const num = Number(value);
+            if (Number.isNaN(num) || num === undefined || num === null) return '—';
+            return `${num.toFixed(1)} fps`;
+        }
+
+        function formatCount(value) {
+            if (value === undefined || value === null || Number.isNaN(Number(value))) return '0';
+            return Number(value).toLocaleString();
+        }
+
+        function formatBytes(value) {
+            const num = Number(value);
+            if (Number.isNaN(num) || num <= 0) return '—';
+            const mb = num / (1024 * 1024);
+            return `${mb.toFixed(1)} MB`;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function truncateText(text, max = 60) {
+            if (!text) return '';
+            return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+        }
+
+        function renderPerformanceMetrics(performance, metadata, cardKey, isExpanded) {
+            const shouldCollect = metadata?.test_config?.collect_performance_metrics;
+            if (!shouldCollect) {
+                return '';
+            }
+
+            const sectionId = `performance--${cardKey}`;
+            const modeLabel = (performance?.mode || '').toString().trim().toLowerCase();
+            const modeDisplay = modeLabel === 'normal' ? 'NORMAL'
+                : modeLabel === 'pause' ? 'PAUSE'
+                : modeLabel === 'quick' ? 'QUICK'
+                : null;
+            const modeBadge = modeDisplay ? `<span class="section-count">${modeDisplay}</span>` : '';
+            const header = `
+                <div class="section-header" onclick="toggleSection('${sectionId}', event)">
+                    <div class="section-title">
+                        <span>Performance Metrics</span>
+                        ${modeBadge}
+                    </div>
+                    <div class="section-toggle">▼</div>
+                </div>
+            `;
+
+            if (!performance) {
+                return `
+                    <div class="collapsible-section ${isExpanded ? 'expanded' : ''}" id="${sectionId}">
+                        ${header}
+                        <div class="section-content">
+                            <div class="section-body">
+                                <div class="performance-card">
+                                    <div class="perf-label">Status</div>
+                                    <div class="perf-value">Not Available</div>
+                                    <div class="perf-subvalue">Metrics collection was enabled but no data was captured.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const cards = [];
+
+            if (modeDisplay) {
+                cards.push(`
+                    <div class="performance-card">
+                        <div class="perf-label">Mode</div>
+                        <div class="perf-value">${modeDisplay}</div>
+                    </div>
+                `);
+            }
+
+            if (performance.navigation && (
+                performance.navigation.timeToFirstByte !== undefined ||
+                performance.navigation.domContentLoaded !== undefined ||
+                performance.navigation.firstContentfulPaint !== undefined ||
+                performance.navigation.loadEvent !== undefined
+            )) {
+                cards.push(`
+                    <div class="performance-card">
+                        <div class="perf-label">Load Timing</div>
+                        <div class="perf-value">${formatMs(performance.navigation.loadEvent ?? performance.navigation.domContentLoaded ?? performance.navigation.timeToFirstByte)}</div>
+                        <div class="perf-subvalue">TTFB: ${formatMs(performance.navigation.timeToFirstByte)}</div>
+                        <div class="perf-subvalue">DOMContentLoaded: ${formatMs(performance.navigation.domContentLoaded)}</div>
+                        <div class="perf-subvalue">FCP: ${formatMs(performance.navigation.firstContentfulPaint)}</div>
+                        <div class="perf-subvalue">Load Event: ${formatMs(performance.navigation.loadEvent)}</div>
+                    </div>
+                `);
+            }
+
+            if (performance.fps) {
+                cards.push(`
+                    <div class="performance-card">
+                        <div class="perf-label">Frame Rate</div>
+                        <div class="perf-value">${formatFps(performance.fps.average)}</div>
+                        <div class="perf-subvalue">Min: ${formatFps(performance.fps.minimum)}</div>
+                        <div class="perf-subvalue">Max: ${formatFps(performance.fps.maximum)}</div>
+                        <div class="perf-subvalue">Dropped Frames: ${formatCount(performance.fps.droppedFrames)}</div>
+                        <div class="perf-subvalue">Samples: ${formatCount(performance.fps.samplesCollected)}</div>
+                    </div>
+                `);
+            }
+
+            if (performance.interactionLatency) {
+                cards.push(`
+                    <div class="performance-card">
+                        <div class="perf-label">Interaction Latency</div>
+                        <div class="perf-value">${formatMs(performance.interactionLatency.avgMs)}</div>
+                        <div class="perf-subvalue">Min: ${formatMs(performance.interactionLatency.minMs)}</div>
+                        <div class="perf-subvalue">Max: ${formatMs(performance.interactionLatency.maxMs)}</div>
+                        <div class="perf-subvalue">Samples: ${formatCount(performance.interactionLatency.sampleCount)}</div>
+                    </div>
+                `);
+            }
+
+            if (performance.longTasks) {
+                cards.push(`
+                    <div class="performance-card">
+                        <div class="perf-label">Main Thread</div>
+                        <div class="perf-value">${formatCount(performance.longTasks.count)} tasks</div>
+                        <div class="perf-subvalue">Blocking Time: ${formatMs(performance.longTasks.totalBlockingTime)}</div>
+                    </div>
+                `);
+            }
+
+            if (performance.consoleErrors !== undefined) {
+                cards.push(`
+                    <div class="performance-card">
+                        <div class="perf-label">Console Errors</div>
+                        <div class="perf-value">${formatCount(performance.consoleErrors)}</div>
+                    </div>
+                `);
+            }
+
+            if (performance.memory) {
+                cards.push(`
+                    <div class="performance-card">
+                        <div class="perf-label">Memory Usage</div>
+                        <div class="perf-value">${formatBytes(performance.memory.usedJSHeapSize)}</div>
+                        <div class="perf-subvalue">Total: ${formatBytes(performance.memory.totalJSHeapSize)}</div>
+                        <div class="perf-subvalue">Limit: ${formatBytes(performance.memory.jsHeapSizeLimit)}</div>
+                    </div>
+                `);
+            }
+
+            const slowResources = (performance.slowResources || []).slice(0, 5);
+            const resourceTable = slowResources.length
+                ? `
+                    <table class="performance-table">
+                        <thead>
+                            <tr>
+                                <th>Duration</th>
+                                <th>Resource</th>
+                                <th>Type</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${slowResources
+                                .map((resource) => `
+                                    <tr>
+                                        <td>${formatMs(resource.duration)}</td>
+                                        <td title="${escapeHtml(resource.name)}">${escapeHtml(truncateText(resource.name))}</td>
+                                        <td>${escapeHtml(resource.initiatorType || '—')}</td>
+                                    </tr>
+                                `)
+                                .join('')}
+                        </tbody>
+                    </table>
+                `
+                : '';
+
+            return `
+                <div class="collapsible-section ${isExpanded ? 'expanded' : ''}" id="${sectionId}">
+                    ${header}
+                    <div class="section-content">
+                        <div class="section-body">
+                            <div class="performance-section">
+                                <div class="performance-grid">
+                                    ${cards.join('')}
+                                </div>
+                                ${resourceTable}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
     </script>
 </body>
 </html>

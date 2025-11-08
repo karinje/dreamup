@@ -85,6 +85,7 @@ export function loadConfig(): AgentConfig {
     // Optional
     enableGifRecording: parseBoolean(process.env.ENABLE_GIF_RECORDING, true), // Default to true for testing
     gifMaxDuration: parseNumber(process.env.GIF_MAX_DURATION_SEC, 60), // Increased to 60s for slow games
+    collectPerformanceMetrics: parseBoolean(process.env.COLLECT_PERFORMANCE_METRICS, false),
   };
 
   return config;
@@ -125,5 +126,6 @@ export const DEFAULT_CONFIG = {
   logLevel: 'info' as LogLevel,
   enableGifRecording: false,
   gifMaxDuration: 30,
+  collectPerformanceMetrics: false,
 } as const;
 

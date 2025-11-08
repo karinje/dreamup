@@ -107,6 +107,7 @@ export interface TestMetadata {
     game_context?: string;
     has_input_hints?: boolean;
     quick_test?: boolean;
+    collect_performance_metrics?: boolean;
   };
 }
 
@@ -133,6 +134,69 @@ export interface ScoreBreakdown {
   final_score: number;
 }
 
+export type PerformanceMode = 'normal' | 'pause' | 'quick';
+
+export interface NavigationPerformance {
+  timeToFirstByte?: number;
+  domContentLoaded?: number;
+  firstPaint?: number | null;
+  firstContentfulPaint?: number | null;
+  loadEvent?: number;
+}
+
+export interface FpsPerformance {
+  average?: number | null;
+  minimum?: number | null;
+  maximum?: number | null;
+  samplesCollected: number;
+  droppedFrames: number;
+}
+
+export interface LongTaskPerformance {
+  count: number;
+  totalBlockingTime: number;
+}
+
+export interface SlowResourceTiming {
+  name: string;
+  duration: number;
+  transferSize?: number;
+  initiatorType?: string;
+  encodedBodySize?: number;
+}
+
+export interface InteractionSampleSummary {
+  label: string;
+  durationMs: number;
+  keys?: string[];
+  timestamp: number;
+}
+
+export interface InteractionLatencyMetrics {
+  sampleCount: number;
+  avgMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  samples: InteractionSampleSummary[];
+}
+
+export interface MemoryUsageMetrics {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+}
+
+export interface PerformanceMetrics {
+  mode?: PerformanceMode | 'unknown';
+  navigation?: NavigationPerformance;
+  fps?: FpsPerformance;
+  longTasks?: LongTaskPerformance;
+  slowResources?: SlowResourceTiming[];
+  interactionLatency?: InteractionLatencyMetrics;
+  consoleErrors?: number;
+  memory?: MemoryUsageMetrics | null;
+}
+
 /**
  * Main QA report structure
  */
@@ -148,6 +212,7 @@ export interface QAReport {
   logs: string[];
   metadata: TestMetadata;
   gif?: string;
+  performance?: PerformanceMetrics;
 }
 
 /**
@@ -165,6 +230,7 @@ export interface TestConfig {
   enableGifRecording?: boolean;
   gifMaxDuration?: number;
   inputHints?: InputHints;
+  collectPerformanceMetrics?: boolean;
 }
 
 /**
@@ -246,6 +312,7 @@ export interface AgentConfig {
   // Optional
   enableGifRecording: boolean;
   gifMaxDuration: number;
+  collectPerformanceMetrics: boolean;
 }
 
 /**
@@ -290,6 +357,7 @@ export interface QAOptions {
   gameContext?: string; // Game-specific context/instructions for the AI
   quickTest?: boolean; // Fast functional test mode - press all keys without LLM
   reasoningEffort?: 'low' | 'medium' | 'high'; // Reasoning effort for gpt-5 and o1 models
+  collectPerformanceMetrics?: boolean; // Toggle collection of performance telemetry
 }
 
 /**
@@ -310,6 +378,7 @@ export interface BatchGameConfig {
   reasoningEffort?: 'low' | 'medium' | 'high';
   timeout?: number;
   maxActionCount?: number;
+  collectPerformanceMetrics?: boolean;
 }
 
 /**
@@ -339,6 +408,7 @@ export interface BatchTestConfig {
   continueOnError?: boolean; // Continue if individual test fails
   verbose?: boolean;
   outputDir?: string;
+  collectPerformanceMetrics?: boolean;
 }
 
 /**
@@ -361,6 +431,7 @@ export interface BatchTestReport {
     maxActionCount?: number[];
     maxParallel: number;
     cooldownMs?: number;
+    collectPerformanceMetrics?: boolean;
   };
   summary: {
     total: number;

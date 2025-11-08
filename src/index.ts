@@ -2,7 +2,7 @@
  * Main orchestrator for DreamUp QA Agent
  */
 
-import { QAReport, QAOptions, TestMetadata, GameState, ControlScheme, Screenshot, Issue } from './types/index.js';
+import { QAReport, QAOptions, TestMetadata, GameState, ControlScheme, Screenshot, Issue, PerformanceMetrics } from './types/index.js';
 import { initConfig, getConfig } from './utils/config.js';
 import { initLogger, logger } from './utils/logger.js';
 import { ExecutionTimeoutError, formatError } from './utils/errors.js';
@@ -14,6 +14,16 @@ import {
   getBrowserInfo,
   getViewportSize,
 } from './agent/browser.js';
+import {
+  preparePerformanceHooks,
+  collectBrowserPerformanceData,
+  PerformanceTracker,
+  setPerformanceMode,
+  stopFpsSampling,
+  PerformanceMode,
+  BrowserPerformanceSnapshot,
+  InteractionStats,
+} from './agent/perf.js';
 import { setupLogListeners, saveLogs, getErrorLogs, clearLogs } from './evidence/logs.js';
 import { createSessionDirectory, saveJSON, joinPath } from './evidence/storage.js';
 import { createGameState, navigateGame, getTestDuration, getCurrentGameState } from './agent/navigation.js';
@@ -34,6 +44,9 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
   const startTime = Date.now();
   let sessionDir: string | null = null;
   let controlScheme: ControlScheme | null = null;
+  let performanceTracker: PerformanceTracker | undefined;
+  let shouldCollectPerformance = false;
+  let performanceMode: PerformanceMode = 'normal';
 
   try {
     // Initialize configuration
@@ -55,11 +68,20 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
     if (options?.outputDir) {
       effectiveConfig.outputDir = options.outputDir;
     }
+    if (options?.collectPerformanceMetrics !== undefined) {
+      effectiveConfig.collectPerformanceMetrics = options.collectPerformanceMetrics;
+    }
+
+    shouldCollectPerformance = !!effectiveConfig.collectPerformanceMetrics;
+    performanceMode = options?.pauseInterval ? 'pause' : options?.quickTest ? 'quick' : 'normal';
+    if (shouldCollectPerformance) {
+      performanceTracker = new PerformanceTracker(performanceMode);
+    }
 
     // Initialize logger
     initLogger(options?.verbose ? 'debug' : effectiveConfig.logLevel);
 
-    logger.info('Starting QA test', { gameUrl, options });
+    logger.info('Starting QA test', { gameUrl, options, collectPerformanceMetrics: shouldCollectPerformance });
 
     // Parse input hints if provided
     if (options?.inputHints) {
@@ -81,6 +103,10 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
 
     // Initialize browser
     await initBrowser();
+    if (shouldCollectPerformance) {
+      await preparePerformanceHooks();
+      await setPerformanceMode(performanceMode);
+    }
 
     // Setup log collection
     setupLogListeners();
@@ -106,7 +132,8 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
       options?.gameSpeed,
       effectiveConfig.maxExecutionTime,
       options?.quickTest,
-      options?.reasoningEffort
+      options?.reasoningEffort,
+      performanceTracker
     );
 
     try {
@@ -129,6 +156,11 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
       if (error instanceof ExecutionTimeoutError) {
         logger.warn('Test timed out, generating report with collected data');
         
+        // Attempt to collect performance metrics before cleanup
+        let timeoutPerformanceData = shouldCollectPerformance ? await collectBrowserPerformanceData() : undefined;
+        let timeoutInteractionStats = shouldCollectPerformance ? performanceTracker?.summarize() : undefined;
+        const timeoutConsoleErrors = getErrorLogs().length;
+        
         // Try to get the game state from the navigation module
         try {
           const currentGameState = getCurrentGameState();
@@ -145,7 +177,11 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
             options?.gameSpeed,
             options?.quickTest,
             currentGameState,
-            options?.reasoningEffort
+            options?.reasoningEffort,
+            shouldCollectPerformance,
+            timeoutPerformanceData,
+            timeoutInteractionStats,
+            shouldCollectPerformance ? timeoutConsoleErrors : undefined
           );
         } catch (reportError) {
           logger.error('Failed to generate timeout report', reportError as Error);
@@ -158,6 +194,10 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
     }
   } catch (error) {
     logger.error('QA test failed', error as Error);
+
+    const errorPerformanceData = shouldCollectPerformance ? await collectBrowserPerformanceData() : undefined;
+    const errorInteractionStats = shouldCollectPerformance ? performanceTracker?.summarize() : undefined;
+    const errorConsoleErrors = getErrorLogs().length;
 
     // Generate error report with actual collected state
     const cfg = getConfig();
@@ -175,7 +215,11 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
         options?.gameContext,
         options?.gameSpeed,
         options?.quickTest,
-        options?.reasoningEffort
+        options?.reasoningEffort,
+        shouldCollectPerformance,
+        errorPerformanceData,
+        errorInteractionStats,
+        shouldCollectPerformance ? errorConsoleErrors : undefined
       );
     } catch (reportError) {
       logger.error('Failed to generate error report', reportError as Error);
@@ -192,7 +236,11 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
         undefined,
         undefined,
         undefined,
-        options?.reasoningEffort
+        options?.reasoningEffort,
+        shouldCollectPerformance,
+        errorPerformanceData,
+        errorInteractionStats,
+        shouldCollectPerformance ? errorConsoleErrors : undefined
       );
     }
   } finally {
@@ -201,6 +249,14 @@ export async function runQA(gameUrl: string, options?: QAOptions): Promise<QARep
       // Save logs if we have a session directory
       if (sessionDir) {
         await saveLogs(sessionDir);
+      }
+
+      try {
+        if (shouldCollectPerformance) {
+          await stopFpsSampling();
+        }
+      } catch (error) {
+        logger.debug('Failed to stop FPS sampling during cleanup', { error: (error as Error).message });
       }
 
       await closeBrowser();
@@ -227,12 +283,17 @@ async function runTest(
   gameSpeed?: number,
   timeoutMs?: number,
   quickTest?: boolean,
-  reasoningEffort?: 'low' | 'medium' | 'high'
+  reasoningEffort?: 'low' | 'medium' | 'high',
+  performanceTracker?: PerformanceTracker
 ): Promise<QAReport> {
   logger.info('Loading game', { url: gameUrl, hasControlScheme: !!controlScheme, pauseMode: !!pauseInterval, hasGameContext: !!gameContext, quickTest: !!quickTest });
 
   // Load the game
   await loadGame(gameUrl);
+
+  if (performanceTracker) {
+    await setPerformanceMode(performanceTracker.getMode());
+  }
 
   logger.info('Game loaded, starting navigation');
 
@@ -240,9 +301,13 @@ async function runTest(
   const gameState = createGameState();
 
   // Navigate through the game (quickTest flag passed through to gameplay phase)
-  await navigateGame(sessionDir, gameState, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest, reasoningEffort);
+  await navigateGame(sessionDir, gameState, gameUrl, controlScheme, model, pauseInterval, gameContext, quickTest, reasoningEffort, performanceTracker);
 
   logger.info('Navigation complete, collecting evidence');
+
+  if (performanceTracker) {
+    await stopFpsSampling();
+  }
 
   // Get logs
   const errorLogs = getErrorLogs();
@@ -311,8 +376,30 @@ async function runTest(
       game_context: gameContext,
       has_input_hints: !!controlScheme,
       quick_test: !!quickTest,
+      collect_performance_metrics: !!performanceTracker,
     },
   };
+
+  const collectPerformance = !!performanceTracker;
+  const browserPerformance = collectPerformance ? await collectBrowserPerformanceData() : undefined;
+  const interactionSummary = collectPerformance ? performanceTracker?.summarize() : undefined;
+
+  const performanceMetrics: PerformanceMetrics | undefined = collectPerformance
+    ? {
+        mode: performanceTracker?.getMode() ?? browserPerformance?.mode,
+        navigation: browserPerformance?.navigation,
+        fps: browserPerformance?.fps,
+        longTasks: browserPerformance?.longTasks,
+        slowResources:
+          browserPerformance?.slowResources && browserPerformance.slowResources.length > 0
+            ? browserPerformance.slowResources
+            : undefined,
+        interactionLatency:
+          interactionSummary && interactionSummary.sampleCount > 0 ? interactionSummary : undefined,
+        consoleErrors: errorLogs.length,
+        memory: browserPerformance?.memory ?? null,
+      }
+    : undefined;
 
   // Create GIF if enabled and we have screenshots
   let gifPath: string | undefined;
@@ -344,8 +431,7 @@ async function runTest(
     }
   }
 
-  // Build final report
-  const report: QAReport = {
+  const finalReport: QAReport = {
     status,
     playability_score: playabilityScore,
     confidence_score: confidenceScore,
@@ -357,11 +443,12 @@ async function runTest(
     logs: [joinPath(sessionDir, 'logs', 'console-logs.json')],
     metadata,
     gif: gifPath,
+    ...(performanceMetrics ? { performance: performanceMetrics } : {}),
   };
 
   // Save report
   const reportPath = joinPath(sessionDir, 'qa-report.json');
-  await saveJSON(reportPath, report);
+  await saveJSON(reportPath, finalReport);
 
   logger.info('Report generated', {
     status,
@@ -373,7 +460,7 @@ async function runTest(
   const summary = generateSummary(status, playabilityScore, issues);
   logger.info(summary);
 
-  return report;
+  return finalReport;
 }
 
 /**
@@ -391,7 +478,11 @@ async function generateTimeoutReport(
   gameSpeed?: number,
   quickTest?: boolean,
   gameState?: GameState | null,
-  reasoningEffort?: 'low' | 'medium' | 'high'
+  reasoningEffort?: 'low' | 'medium' | 'high',
+  collectPerformanceMetrics?: boolean,
+  performanceData?: BrowserPerformanceSnapshot,
+  interactionStats?: InteractionStats,
+  consoleErrors?: number
 ): Promise<QAReport> {
   logger.info('Generating report for timed out test');
   
@@ -478,6 +569,7 @@ async function generateTimeoutReport(
       game_context: gameContext,
       has_input_hints: !!controlScheme,
       quick_test: !!quickTest,
+      collect_performance_metrics: !!collectPerformanceMetrics,
     },
   };
   
@@ -515,7 +607,6 @@ async function generateTimeoutReport(
   let confidenceScore = 0;
   let scoreBreakdown;
   if (evaluation) {
-    const errorLogs = await getErrorLogs();
     scoreBreakdown = calculatePlayabilityScoreWithBreakdown(evaluation, issues);
     playabilityScore = scoreBreakdown.final_score;
     confidenceScore = calculateConfidenceScore(evaluation, errorLogs.length);
@@ -524,18 +615,36 @@ async function generateTimeoutReport(
   // Determine status based on score and issues (not just screenshot count)
   const status = evaluation ? determineTestStatus(playabilityScore, issues) : 'fail';
   
+  const performanceMetrics: PerformanceMetrics | undefined = collectPerformanceMetrics
+    ? {
+        mode: (performanceData?.mode as PerformanceMode | 'unknown') ?? 'unknown',
+        navigation: performanceData?.navigation,
+        fps: performanceData?.fps,
+        longTasks: performanceData?.longTasks,
+        slowResources:
+          performanceData?.slowResources && performanceData.slowResources.length > 0
+            ? performanceData.slowResources
+            : undefined,
+        interactionLatency:
+          interactionStats && interactionStats.sampleCount > 0 ? interactionStats : undefined,
+        consoleErrors: consoleErrors,
+        memory: performanceData?.memory ?? undefined,
+      }
+    : undefined;
+
   const report: QAReport = {
     status,
-    playability_score: playabilityScore,
-    confidence_score: confidenceScore,
+    playability_score: evaluation ? Math.round(playabilityScore) : 0,
+    confidence_score: evaluation ? Math.round(confidenceScore) : 0,
     score_breakdown: scoreBreakdown,
     issues,
-    observations: evaluation?.observations,
-    screenshots: screenshots.map(s => s.path),
-    screenshot_metadata: screenshots,  // Include full metadata (may not have LLM data for timeout cases)
-    gif: gifPath,
-    logs: [path.join(sessionDir, 'logs', 'console-logs.json')],
+    observations: evaluation ? evaluation.observations : [],
+    screenshots: screenshots.map((s) => s.path),
+    screenshot_metadata: screenshots,
+    logs: errorLogs.length > 0 ? [joinPath(sessionDir, 'logs', 'console-logs.json')] : [],
     metadata,
+    gif: gifPath,
+    ...(performanceMetrics ? { performance: performanceMetrics } : {}),
   };
   
   // Save report to file
@@ -565,7 +674,11 @@ async function generateErrorReport(
   gameContext?: string,
   gameSpeed?: number,
   quickTest?: boolean,
-  reasoningEffort?: 'low' | 'medium' | 'high'
+  reasoningEffort?: 'low' | 'medium' | 'high',
+  collectPerformanceMetrics?: boolean,
+  performanceData?: BrowserPerformanceSnapshot,
+  interactionStats?: InteractionStats,
+  consoleErrors?: number
 ): Promise<QAReport> {
   logger.warn('Generating error report');
 
@@ -668,6 +781,7 @@ async function generateErrorReport(
       game_context: gameContext,
       has_input_hints: !!controlScheme,
       quick_test: quickTest,
+      collect_performance_metrics: !!collectPerformanceMetrics,
     },
   };
 
@@ -681,6 +795,24 @@ async function generateErrorReport(
     logs: errorLogs.length > 0 ? [joinPath(outputDir, 'logs', 'console-logs.json')] : [],
     metadata,
     gif: gifPath,
+    ...(collectPerformanceMetrics
+      ? {
+          performance: {
+            mode: (performanceData?.mode as PerformanceMode | 'unknown') ?? 'unknown',
+            navigation: performanceData?.navigation,
+            fps: performanceData?.fps,
+            longTasks: performanceData?.longTasks,
+            slowResources:
+              performanceData?.slowResources && performanceData.slowResources.length > 0
+                ? performanceData.slowResources
+                : undefined,
+            interactionLatency:
+              interactionStats && interactionStats.sampleCount > 0 ? interactionStats : undefined,
+            consoleErrors: consoleErrors,
+            memory: performanceData?.memory ?? undefined,
+          } as PerformanceMetrics,
+        }
+      : {}),
   };
 
   // Save report to file

@@ -36,6 +36,7 @@ function generateCombinations(config: BatchTestConfig): Array<{
   const reasoningEfforts = config.reasoningEffort || [undefined];
   const timeouts = config.timeout || [undefined];
   const maxActionCounts = config.maxActionCount || [undefined];
+  const globalCollectPerformance = config.collectPerformanceMetrics;
 
   // Generate all combinations
   for (const game of games) {
@@ -51,6 +52,7 @@ function generateCombinations(config: BatchTestConfig): Array<{
     let gameReasoningEfforts: Array<typeof reasoningEfforts[0]>;
     let gameTimeouts: Array<number | undefined>;
     let gameMaxActionCounts: Array<number | undefined>;
+    let gameCollectPerformance: boolean | undefined;
     
     if (typeof game === 'string') {
       // Simple URL string - use all global defaults
@@ -65,6 +67,7 @@ function generateCombinations(config: BatchTestConfig): Array<{
       gameReasoningEfforts = reasoningEfforts;
       gameTimeouts = timeouts;
       gameMaxActionCounts = maxActionCounts;
+      gameCollectPerformance = globalCollectPerformance;
     } else {
       // Game config object - use per-game overrides if provided, otherwise global defaults
       gameUrl = game.url;
@@ -81,6 +84,8 @@ function generateCombinations(config: BatchTestConfig): Array<{
       gameReasoningEfforts = game.reasoningEffort ? [game.reasoningEffort] : reasoningEfforts;
       gameTimeouts = game.timeout !== undefined ? [game.timeout] : timeouts;
       gameMaxActionCounts = game.maxActionCount !== undefined ? [game.maxActionCount] : maxActionCounts;
+      gameCollectPerformance =
+        game.collectPerformanceMetrics !== undefined ? game.collectPerformanceMetrics : globalCollectPerformance;
     }
 
     // Generate combinations for this game
@@ -104,6 +109,7 @@ function generateCombinations(config: BatchTestConfig): Array<{
                       if (reasoningEffort) options.reasoningEffort = reasoningEffort;
                       if (timeout) options.maxExecutionTime = timeout;
                       if (maxActionCount) options.maxActionCount = maxActionCount;
+                      if (gameCollectPerformance !== undefined) options.collectPerformanceMetrics = gameCollectPerformance;
 
                       // Generate label for this combination
                       const parts: string[] = [];
@@ -113,6 +119,7 @@ function generateCombinations(config: BatchTestConfig): Array<{
                       if (quickTest) parts.push('quick');
                       if (hint) parts.push('hints');
                       if (context) parts.push('context');
+                      if (gameCollectPerformance) parts.push('perf');
                       const label = parts.length > 0 ? parts.join(',') : 'default';
 
                       combinations.push({
@@ -285,6 +292,7 @@ export async function runBatchTests(
       maxActionCount: config.maxActionCount,
       maxParallel,
       cooldownMs: config.cooldownMs,
+      collectPerformanceMetrics: config.collectPerformanceMetrics,
     },
     summary: {
       total,

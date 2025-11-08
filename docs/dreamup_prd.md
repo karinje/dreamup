@@ -282,14 +282,15 @@ The game-building agent picks the input schema during game planning. For QA test
   - Measure page load time
   - Record memory usage trends
   - Detect performance degradation over time
-
-**F5.3 Accessibility Checks**
-- **Requirement:** Basic accessibility evaluation
-- **Acceptance Criteria:**
-  - Verify keyboard navigation support
-  - Check color contrast ratios
-  - Detect missing alt text on images
-  - Validate ARIA labels
+  - Surface slow resources and long main-thread tasks
+- **Implementation Notes:**
+  - Navigation Timing API (`performance.getEntriesByType('navigation')`) supplies TTFB, DOMContentLoaded, First Contentful Paint, and Load Event timestamps.
+  - An injected `requestAnimationFrame` sampler produces average/min/max FPS, dropped frame count, and total samples while the flag is enabled.
+  - Interaction latency is measured around every agent input (key press or simulated control), recording individual samples and aggregate min/avg/max.
+  - A `PerformanceObserver` watching the `longtask` entry type totals blocking time and task count for main-thread stalls.
+  - Slow network or asset loads are collected from `performance.getEntriesByType('resource')`, showing the top 5 durations with initiator type hints.
+  - Console error volume comes from the existing log capture pipeline; memory snapshots use `performance.memory` when Chrome exposes it.
+  - Collection is opt-in via `collectPerformanceMetrics` (CLI `--collect-performance`, env `COLLECT_PERFORMANCE_METRICS=true`, or batch config flag) and the dashboard renders a collapsible "Performance Metrics" section when data is present.
 
 #### F6: Batch Testing
 

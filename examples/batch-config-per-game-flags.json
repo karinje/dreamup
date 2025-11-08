@@ -7,6 +7,7 @@
       "timeout": 480000,
       "model": "gpt-4o",
       "quickTest": false,
+      "collectPerformanceMetrics": true,
       "inputHints": {
         "type": "semantic",
         "content": "Use arrow keys to control the snake. Move towards the orange food to grow."
@@ -20,6 +21,7 @@
       "timeout": 480000,
       "model": "gpt-4o",
       "quickTest": false,
+      "collectPerformanceMetrics": true,
       "inputHints": {
         "type": "semantic",
         "content": "Use ArrowUp to move paddle up and ArrowDown to move paddle down"
@@ -31,6 +33,7 @@
       "name": "2048 Game",
       "quickTest": true,
       "timeout": 300000,
+      "collectPerformanceMetrics": false,
       "inputHints": {
         "type": "semantic",
         "content": "Use arrow keys to move tiles"
@@ -40,6 +43,7 @@
   "maxParallel": 3,
   "cooldownMs": 2000,
   "verbose": false,
-  "outputDir": "output"
+  "outputDir": "output",
+  "collectPerformanceMetrics": true
 }
 

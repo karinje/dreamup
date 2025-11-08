@@ -14,6 +14,7 @@ DreamUp QA Agent autonomously tests browser games by simulating user interaction
 - 🎯 **LLM-Driven Testing**: Strategic gameplay with temporal context and pause-step synchronization
 - 📸 **Evidence Capture**: Timestamped screenshots, animated GIFs, and console logs
 - 🧠 **AI Evaluation**: Uses LLMs to assess playability, control responsiveness, and stability
+- 📈 **Performance Telemetry**: Optional load/FPS/latency/memory instrumentation surfaced in reports
 - 📊 **Visual Dashboard**: Interactive web UI for viewing test reports and gameplay recordings
 - 🚀 **Multiple Interfaces**: CLI, programmatic API, and Lambda-ready
 
@@ -78,6 +79,9 @@ qa-agent https://your-game-url.com \
 qa-agent https://your-game-url.com \
   --context "You control the right paddle. React early to ball movement." \
   --pause 0.25
+
+# Capture performance telemetry (navigation timing, FPS, latency, slow resources)
+qa-agent https://your-game-url.com --collect-performance
 ```
 
 **See [DEMO.md](DEMO.md) for complete demo walkthrough.**
@@ -150,6 +154,13 @@ This generates: **2 games × 2 models × 2 pause intervals × 1 quickTest = 8 to
 - ✅ Dashboard shows batch runs with drill-down to individual tests
 
 **See [docs/BATCH_TESTING.md](docs/BATCH_TESTING.md) for complete documentation.**
+
+### Performance Metrics (Optional)
+
+- Enable at runtime with the CLI flag `--collect-performance`, environment variable `COLLECT_PERFORMANCE_METRICS=true`, or batch config option `"collectPerformanceMetrics": true` (global or per game).
+- Captures navigation timing (TTFB, DOMContentLoaded, FCP, Load), frame pacing (avg/min/max FPS and dropped frames), interaction latency samples, long-task blocking time, console error count, top slow resources, and Chrome heap usage snapshots.
+- The dashboard renders a collapsible “Performance Metrics” panel for any report that includes these measurements.
+- Metrics collection is off by default to minimize overhead and API usage.
 
 #### Dashboard Viewer
 

@@ -20,6 +20,7 @@ This example demonstrates how to use **per-game flags** with **global defaults**
       "timeout": 480000,
       "model": "gpt-4o",
       "quickTest": false,
+      "collectPerformanceMetrics": true,
       "inputHints": { "type": "semantic", "content": "..." },
       "gameContext": "..."
     },
@@ -28,7 +29,8 @@ This example demonstrates how to use **per-game flags** with **global defaults**
       "name": "Pong Game",
       "pauseInterval": 0.5,
       "model": "gpt-4o-mini",
-      "quickTest": false
+      "quickTest": false,
+      "collectPerformanceMetrics": false
     },
     {
       "url": "https://game3.com",
@@ -41,14 +43,15 @@ This example demonstrates how to use **per-game flags** with **global defaults**
   "pauseInterval": [0.35, 0.5],
   "timeout": [300000],
   "maxParallel": 5,
-  "cooldownMs": 1000
+  "cooldownMs": 1000,
+  "collectPerformanceMetrics": true
 }
 ```
 
 ## Result
 
 - **Snake Game**: Uses its own settings (pause 0.35, timeout 480000, gpt-4o) = **1 test**
-- **Pong Game**: Uses its own pause/model, but timeout from global = **1 test**
+- **Pong Game**: Uses its own pause/model and disables performance metrics locally, but timeout from global = **1 test**
 - **2048 Game**: Uses its own quickTest, but models/pause/timeout from global = **2 models × 2 pause × 1 timeout = 4 tests**
 - **game4.com**: Uses all global defaults = **2 models × 2 pause × 1 timeout = 4 tests**
 
@@ -66,6 +69,7 @@ Each game object can specify:
 - `reasoningEffort` - Reasoning effort level ("low" | "medium" | "high")
 - `inputHints` - Input control hints (object)
 - `gameContext` - Game-specific context (string)
+- `collectPerformanceMetrics` - Override global telemetry flag for the specific game (boolean)
 
 ## Global Flags (Defaults)
 
@@ -79,6 +83,7 @@ These apply to all games unless overridden:
 - `gameContext` - Array of contexts
 - `reasoningEffort` - Array of reasoning efforts
 - `maxActionCount` - Array of max action counts
+- `collectPerformanceMetrics` - Boolean default for whether telemetry is captured
 
 ## Common Flags (Always Global)
 

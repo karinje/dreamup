@@ -26,13 +26,20 @@ let stagehandInstance: Stagehand | null = null;
 export async function initBrowser(): Promise<Stagehand> {
   const config = getConfig();
 
+  // Get testId FIRST before any async operations to ensure we capture the async context
+  const testId = browserStorage.getStore();
+
   logger.info('Initializing browser', {
     provider: 'browserbase',
     projectId: config.browserbaseProjectId,
+    testId: testId || 'global',
+    hasAsyncContext: testId !== undefined,
   });
 
+  let stagehand: Stagehand | null = null;
+  
   try {
-    const stagehand = new Stagehand({
+    stagehand = new Stagehand({
       env: 'BROWSERBASE',
       apiKey: config.browserbaseApiKey,
       projectId: config.browserbaseProjectId,
@@ -40,23 +47,37 @@ export async function initBrowser(): Promise<Stagehand> {
       verbose: 0,
     });
 
-    await stagehand.init();
-
-    // Store in async context if we're in one (created by browserStorage.run())
-    const testId = browserStorage.getStore();
+    // Store the instance IMMEDIATELY (before init) to prevent race conditions
+    // This ensures getBrowser() can find it even if init() is still in progress
     if (testId !== undefined) {
-      // We're in an async context - store the instance in the Map
+      // We're in an async context - store the instance in the Map immediately
       browserInstances.set(testId, stagehand);
+      logger.debug('Browser instance stored in Map', { testId, instanceCount: browserInstances.size });
     } else {
       // Not in an async context, use global (backward compatibility)
       stagehandInstance = stagehand;
+      logger.debug('Browser instance stored globally');
     }
 
-    logger.info('Browser initialized successfully');
+    // Now initialize (this is async and may take time)
+    await stagehand.init();
+
+    logger.info('Browser initialized successfully', { testId: testId || 'global', mapSize: browserInstances.size });
     return stagehand;
   } catch (error) {
-    logger.error('Failed to initialize browser', error as Error);
-    throw new BrowserError('Failed to initialize browser');
+    // Clean up the instance if init failed
+    if (testId !== undefined) {
+      const deleted = browserInstances.delete(testId);
+      logger.debug('Cleaned up browser instance after error', { testId, wasDeleted: deleted, mapSize: browserInstances.size });
+    } else {
+      stagehandInstance = null;
+    }
+    const errorMsg = (error as Error).message;
+    logger.error('Failed to initialize browser', error as Error, { 
+      testId: testId || 'global',
+      errorMessage: errorMsg,
+    });
+    throw new BrowserError(`Failed to initialize browser: ${errorMsg}`);
   }
 }
 
@@ -72,6 +93,12 @@ export function getBrowser(): Stagehand {
     if (instance) {
       return instance;
     }
+    logger.error('Missing browser instance for async context', undefined, {
+      testId,
+      mapSize: browserInstances.size,
+      availableKeys: Array.from(browserInstances.keys()),
+      hasGlobal: !!stagehandInstance,
+    });
     throw new BrowserError(`Browser not initialized for test ${testId}. Call initBrowser() first.`);
   }
   

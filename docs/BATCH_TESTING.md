@@ -6,6 +6,7 @@
 - JSON config file supporting arrays for all options
 - Generates all combinations automatically
 - Example: 2 games × 2 models × 2 pause intervals = 8 total tests
+- Optional `collectPerformanceMetrics` flag (global default + per-game override) gates telemetry capture
 
 ### 2. Batch Runner (`src/batch.ts`)
 - `runBatchTests()` function with parallel execution
