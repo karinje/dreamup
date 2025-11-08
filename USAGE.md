@@ -146,6 +146,22 @@ qa-agent https://electroacoustic-lashawnda-unlunar.ngrok-free.dev/pong/ \
 - Enables performance telemetry (load timing, FPS, interaction latency, long tasks, slow resources, memory)
 - Surfaced in the dashboard inside the “Performance Metrics” panel and stored in `qa-report.json.performance`
 
+### Example 5: Batch Run Across DreamUp Games
+
+```bash
+npm run batch -- \
+  --config examples/batch-config-dreamup-games.json \
+  --output ./output \
+  --max-parallel 3 \
+  --collect-performance
+```
+
+**What this does:**
+- Launches the batch runner using `examples/batch-config-dreamup-games.json` (includes global flags and per-game overrides)
+- Writes all individual and batch reports to `./output`
+- Processes up to three games at a time (tune `--max-parallel` to match Browserbase concurrency)
+- Enables performance telemetry for games that opt in via global or per-game `collectPerformanceMetrics`
+
 ## Understanding the Results
 
 ### Status
@@ -186,4 +202,15 @@ View reports in the web dashboard:
 cd viewer && npm start
 ```
 Then open `http://localhost:3000` in your browser.
+
+## Performance Metrics Reference
+
+- **Navigation Timing** – Sourced from `performance.timing` and `PerformanceNavigationTiming`. Includes `timeToFirstByte`, `domContentLoaded`, `firstContentfulPaint`, and `loadEvent` (all ms). We compute each as `eventEnd - navigationStart`.
+- **FPS Samples** – Captured via `PerformanceObserver` watching `frames` and RAF deltas. We record per-sample frames-per-second, then aggregate `average`, `minimum`, `maximum`, `droppedFrames`, and `samplesCollected`.
+- **Interaction Latency** – Measured from the PerformanceEventTiming API (`event.processingStart - event.startTime`). The agent emits `avgMs`, `minMs`, `maxMs`, and the `sampleCount`.
+- **Long Tasks** – Counted with a `PerformanceObserver` on `"longtask"`. Each task contributes to `count` and `totalBlockingTime` (duration over 50 ms summed).
+- **Console Errors** – Number of messages logged at `error` level during the run (collected by our page instrumentation).
+- **Memory Usage** – Snapshot of Chrome’s JS heap via `performance.memory` (`usedJSHeapSize`, `totalJSHeapSize`, `jsHeapSizeLimit`).
+- **Slow Resources** – Resources whose load time exceeds 2000 ms. Each entry records URL, type, duration, and render-blocking status using `PerformanceResourceTiming`.
+- **Collection Overhead** – Metrics are harvested once per pause cycle (or every 5 seconds in continuous mode) and emitted in `qa-report.json.performance`. Disable via `--collect-performance` omission to save Browserbase session time.
 
